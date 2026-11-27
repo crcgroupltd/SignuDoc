@@ -170,12 +170,12 @@ You need Docker with Compose, a domain name, a reverse proxy that serves HTTPS (
 
 1. **Get the code:** `git clone https://github.com/NYLLON-SOFTWARE/SignuDoc.git && cd SignuDoc`
 2. **Fill in `docker-compose.yml`.** Replace every `CHANGE_ME` (database password, `BETTER_AUTH_SECRET`, `SETUP_TOKEN`, `RESEND_API_KEY`) and set `APP_URL` to your public address. There is no `.env` file: every setting is in the compose file.
-3. **Start it:** `docker compose up -d --build`. Two containers start, `app` and `db`, and the app applies the database schema by itself.
+3. **Start it:** `docker login ghcr.io` (once, if the image is private), then `docker compose pull && docker compose up -d`. Two containers start, `app` and `db`, and the app applies the database schema by itself. The image comes from GitHub Container Registry, where `.github/workflows/docker-image.yml` publishes it on every push to `main`; `docker compose up -d --build` builds it from your checkout instead.
 4. **Point your reverse proxy at port 3000.** See [Reverse proxy](docs/self-hosting.md#reverse-proxy) for the headers and upload size it needs.
 5. **Open your site at `/setup`.** Give the setup token, name your organization, give the email address people should write to for help, and create the first account, which is the administrator.
 6. **Set up the address you send from.** Under Settings, Organization, enter an address at your own domain. The site lists the DNS records to add and checks them for you.
 
-**Taking new versions:** `git pull && docker compose up -d --build`. New database migrations apply when the app starts. The [self-hosting guide](docs/self-hosting.md) covers backups, sign-in security, the seal and every optional setting.
+**Taking new versions:** `docker compose pull && docker compose up -d`. New database migrations apply when the app starts. The [self-hosting guide](docs/self-hosting.md) covers backups, sign-in security, the seal and every optional setting.
 
 ### Try it on your computer
 
@@ -193,7 +193,7 @@ Files stay on disk and emails are written to `.data/outbox` instead of being sen
 
 - **Two containers.** Next.js 16 in a standalone Node.js server, and Postgres. The daily cleanup, deadline expiry and webhook retries run on timers inside the app, so there is no cron to set up.
 - **Secure by default.** Private file storage with no public URLs, a strict Content Security Policy, rate limits kept in Postgres, signing links that are hashed at rest, sign-in lockout, and a setup page that only the first visitor, or the holder of a `SETUP_TOKEN`, can use.
-- **Tested.** Unit tests, database tests against a real Postgres, and a browser test that sets up a fresh install, sends a document and signs it, run on every pull request.
+- **Tested.** Unit tests, database tests against a real Postgres, and a browser test that sets up a fresh install, sends a document and signs it (`npm test`, `npm run test:db`, `npm run test:e2e`), run before changes are merged.
 
 ## Using SignuDoc for real agreements
 

@@ -22,7 +22,7 @@ SignuDoc runs as two containers from `docker-compose.yml`: `app` (the Next.js se
    - `SETUP_TOKEN`, a secret the setup page asks for. See [Lock down a new install](#lock-down-a-new-install).
    - `RESEND_API_KEY`, from your [Resend](https://resend.com) account.
    - `APP_URL`, the public `https://` address your reverse proxy serves, with no trailing slash.
-2. **Start it:** `docker compose up -d --build`. The app waits for the database, applies any new migrations, then starts on port 3000. `docker compose logs -f app` shows `[migrate]` and `[scheduler]` lines as it comes up.
+2. **Start it:** run `docker login ghcr.io` once if the image is private (a GitHub token with `read:packages`), then `docker compose pull && docker compose up -d`. The app waits for the database, applies any new migrations, then starts on port 3000. `docker compose logs -f app` shows `[migrate]` and `[scheduler]` lines as it comes up.
 3. **Put your reverse proxy in front.** See [Reverse proxy](#reverse-proxy).
 4. **Open `https://<your site>/setup`** and set the site up. See [Set the site up](#set-the-site-up).
 
@@ -48,9 +48,11 @@ A new install is claimed by whoever opens it first. With `SETUP_TOKEN` set (the 
 Settings, SignuDoc, **Check for updates** tells you when a new [release](https://github.com/NYLLON-SOFTWARE/SignuDoc/releases) is out and what is in it. To take it:
 
 ```bash
-git pull
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
+
+The image is `ghcr.io/crcgroupltd/signudoc`, built and pushed by `.github/workflows/docker-image.yml`: `:latest` on every push to `main`, `:1.2.3` and `:1.2` for a `v1.2.3` tag, and `:sha-<commit>` for each build. Pin one of those in `docker-compose.yml` instead of `:latest` to choose when you update. To build from a checkout instead, `git pull && docker compose up -d --build`.
 
 The new image applies any new database migrations when it starts; they only ever apply what is new. Back up first (see [Backups](#backups)). If you keep your own changes to `docker-compose.yml`, `git stash` them before pulling and `git stash pop` after.
 

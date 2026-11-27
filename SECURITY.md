@@ -38,14 +38,13 @@ Security fixes are applied to the latest release only.
 
 ## How the code is checked
 
-- **Static analysis.** GitHub CodeQL (the `security-extended` queries) runs on every pull request, on `main` and weekly, over the TypeScript and over the GitHub Actions workflows. See `.github/workflows/codeql.yml`.
-- **Dependencies.** Every pull request runs GitHub's dependency review, which fails on a new dependency with a known high or critical vulnerability, or under a license this project does not take (GPL, AGPL, SSPL). `npm audit` checks what the app ships every week and on `main`. See `.github/workflows/dependency-audit.yml`.
-- **Repository practices.** OpenSSF Scorecard scores the repository weekly; the result is at [scorecard.dev](https://scorecard.dev/viewer/?uri=github.com/NYLLON-SOFTWARE/SignuDoc).
-- **Tests.** Typecheck, lint, unit tests, tests against a real Postgres and an end-to-end browser test run on every pull request (`.github/workflows/ci.yml`).
+- **Tests.** Typecheck, lint, unit tests, tests against a real Postgres and an end-to-end browser test (`npm run typecheck`, `npm run lint`, `npm test`, `npm run test:db`, `npm run test:e2e`) are run before changes are merged. They are not run in GitHub Actions in this repository.
+- **Image.** `.github/workflows/docker-image.yml` builds the Docker image on every pull request and publishes it to GitHub Container Registry from `main` and version tags. It is the only workflow.
+- **Upstream checks.** The upstream project, [NYLLON-SOFTWARE/SignuDoc](https://github.com/NYLLON-SOFTWARE/SignuDoc), runs CodeQL, dependency review and OpenSSF Scorecard on its own repository.
 
 ## Verifying a release
 
-Each release from v0.3.0 on has these files attached, made by `.github/workflows/release-artifacts.yml`:
+Each upstream release from v0.3.0 on, at [NYLLON-SOFTWARE/SignuDoc](https://github.com/NYLLON-SOFTWARE/SignuDoc/releases), has these files attached, made by its release workflow:
 
 - `signudoc-<version>.tar.gz`: the source of the tagged commit.
 - `signudoc-<version>.cdx.json`: a software bill of materials in CycloneDX format, listing every npm package the app ships with its version and license.

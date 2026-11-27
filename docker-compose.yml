@@ -1,8 +1,12 @@
 # SignuDoc: the app and its Postgres database.
 #
-#   docker compose up -d --build     build and start (migrations run on start)
+#   docker compose pull              get the latest image from GHCR
+#   docker compose up -d             start (migrations run on start)
 #   docker compose logs -f app       follow the app's logs
 #   docker compose down              stop (data is kept in the volumes)
+#
+# The image is built and pushed by .github/workflows/docker-image.yml. To
+# build it from this checkout instead: docker compose up -d --build
 #
 # Every setting is in this file: there is no .env file. Replace each
 # CHANGE_ME before the first start. Put your own reverse proxy in front of
@@ -30,8 +34,12 @@ services:
       retries: 30
 
   app:
+    # Pin a release (for example :1.2.3) or a commit (:sha-abc1234) instead of
+    # :latest to control when updates happen. The package is private unless
+    # you make it public: run `docker login ghcr.io` on the host first, with
+    # a token that has read:packages.
+    image: ghcr.io/crcgroupltd/signudoc:latest
     build: .
-    image: signudoc:local
     restart: unless-stopped
     depends_on:
       db:

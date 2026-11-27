@@ -25,12 +25,19 @@ import {
   createStorageService,
   type StorageService,
 } from "./services/storage.ts";
+import { PREFILL_ASSIGNEE_ID } from "./schemas/template.ts";
 import {
   createDraftFromTemplate,
+  createTemplateFromUpload,
   deleteTemplate,
+  describeBulkSendPrefillProblem,
+  getTemplateEditorData,
+  getTemplateForBulkSend,
   getUseTemplateDataForUser,
   listTemplatesForUser,
   MAX_TEMPLATES_PER_USER,
+  replaceTemplateFields,
+  replaceTemplateRoles,
   saveEnvelopeAsTemplate,
   TemplateError,
 } from "./templates.ts";
@@ -770,5 +777,299 @@ test("a template saved while its account is being deleted leaves no document beh
     (await database.query(`select 1 from "user" where id = $1`, [userId]))
       .rowCount,
     0,
+  );
+});
+
+// --- The template editor and prefill boxes -------------------------------
+
+async function createEditedTemplate(userId: string) {
+  const created = await createTemplateFromUpload(
+    userId,
+    {
+      name: "Consulting agreement",
+      sourcePdf: {
+        body: sourcePdf,
+        contentType: "application/pdf",
+        filename: "consulting.pdf",
+      },
+    },
+    { database, storageService },
+  );
+  const clientId = randomUUID();
+  const firmId = randomUUID();
+
+  await replaceTemplateRoles(
+    userId,
+    created.id,
+    {
+      roles: [
+        { id: clientId, kind: "signer", name: "Client", step: 1 },
+        { id: firmId, kind: "signer", name: "Firm", step: 2 },
+      ],
+    },
+    { database },
+  );
+
+  const editor = await getTemplateEditorData(userId, created.id, {
+    database,
+    storageService,
+  });
+
+  assert.ok(editor);
+
+  const saved = await replaceTemplateFields(
+    userId,
+    created.id,
+    {
+      expectedRevision: editor.fieldsRevision,
+      fields: [
+        {
+          height: 0.06,
+          id: randomUUID(),
+          page: 1,
+          required: true,
+          signerId: clientId,
+          type: "signature",
+          width: 0.3,
+          x: 0.1,
+          y: 0.8,
+        },
+        {
+          height: 0.06,
+          id: randomUUID(),
+          page: 2,
+          required: true,
+          signerId: firmId,
+          type: "signature",
+          width: 0.3,
+          x: 0.1,
+          y: 0.8,
+        },
+        {
+          height: 0.05,
+          id: "fee-box",
+          label: "Monthly fee",
+          page: 1,
+          required: true,
+          signerId: PREFILL_ASSIGNEE_ID,
+          type: "number",
+          width: 0.3,
+          x: 0.1,
+          y: 0.2,
+        },
+        {
+          height: 0.05,
+          id: "note-box",
+          label: "Notes",
+          page: 1,
+          required: false,
+          signerId: PREFILL_ASSIGNEE_ID,
+          type: "text",
+          width: 0.5,
+          x: 0.1,
+          y: 0.3,
+        },
+      ],
+    },
+    { database },
+  );
+
+  return { clientId, firmId, saved, templateId: created.id };
+}
+
+test("a template is made from an upload, without an envelope", async () => {
+  const userId = await createUser();
+  const { saved, templateId } = await createEditedTemplate(userId);
+
+  assert.equal(saved.fieldsRevision, 1);
+
+  const editor = await getTemplateEditorData(userId, templateId, {
+    database,
+    storageService,
+  });
+
+  assert.ok(editor);
+  assert.equal(editor.title, "Consulting agreement");
+  assert.equal(editor.pageCount, 2);
+  assert.equal(editor.pdfUrl, `/api/templates/${templateId}/document`);
+  // The roles, then the assignee for prefill boxes.
+  assert.deepEqual(
+    editor.signers.map((signer) => signer.name),
+    ["Client", "Firm", "Prefilled before sending"],
+  );
+  assert.equal(editor.fields.length, 4);
+
+  const usable = await getUseTemplateDataForUser(userId, templateId, database);
+
+  assert.ok(usable);
+  assert.deepEqual(
+    usable.prefillFields.map((field) => [field.id, field.type, field.required]),
+    [
+      ["fee-box", "number", true],
+      ["note-box", "text", false],
+    ],
+  );
+
+  const listed = await listTemplatesForUser(userId, database);
+
+  assert.equal(
+    listed.find((entry) => entry.id === templateId)?.name,
+    "Consulting agreement",
+  );
+});
+
+test("a save made against an older field list is refused", async () => {
+  const userId = await createUser();
+  const { templateId } = await createEditedTemplate(userId);
+
+  await assert.rejects(
+    replaceTemplateFields(
+      userId,
+      templateId,
+      { expectedRevision: 0, fields: [] },
+      { database },
+    ),
+    (error: unknown) =>
+      error instanceof TemplateError && error.statusCode === 409,
+  );
+});
+
+test("signatures cannot be prefill boxes", async () => {
+  const userId = await createUser();
+  const { templateId } = await createEditedTemplate(userId);
+
+  await assert.rejects(
+    replaceTemplateFields(
+      userId,
+      templateId,
+      {
+        fields: [
+          {
+            height: 0.05,
+            id: randomUUID(),
+            page: 1,
+            required: true,
+            signerId: PREFILL_ASSIGNEE_ID,
+            type: "signature",
+            width: 0.3,
+            x: 0.1,
+            y: 0.1,
+          },
+        ],
+      },
+      { database },
+    ),
+    (error: unknown) =>
+      error instanceof TemplateError && error.statusCode === 400,
+  );
+});
+
+test("removing a role removes its fields", async () => {
+  const userId = await createUser();
+  const { clientId, templateId } = await createEditedTemplate(userId);
+
+  await replaceTemplateRoles(
+    userId,
+    templateId,
+    { roles: [{ id: clientId, kind: "signer", name: "Client", step: 1 }] },
+    { database },
+  );
+
+  const editor = await getTemplateEditorData(userId, templateId, {
+    database,
+    storageService,
+  });
+
+  assert.ok(editor);
+  assert.deepEqual(
+    editor.fields
+      .filter((field) => field.signerId !== PREFILL_ASSIGNEE_ID)
+      .map((field) => field.signerId),
+    [clientId],
+  );
+});
+
+test("using a template writes the prefill values into the draft's document", async () => {
+  const userId = await createUser();
+  const { templateId } = await createEditedTemplate(userId);
+  const people = {
+    signers: [
+      { email: "cara@example.test", name: "Cara Client" },
+      { email: "finn@example.test", name: "Finn Firm" },
+    ],
+    title: "Consulting for Acme",
+  };
+
+  // A required prefill box left empty names the box.
+  await assert.rejects(
+    createDraftFromTemplate(userId, templateId, people, {
+      database,
+      storageService,
+    }),
+    (error: unknown) =>
+      error instanceof TemplateError &&
+      error.statusCode === 400 &&
+      error.fieldId === "fee-box",
+  );
+
+  const made = await createDraftFromTemplate(
+    userId,
+    templateId,
+    { ...people, prefill: { "fee-box": "2,500" } },
+    { database, storageService },
+  );
+  const document = await getDraftEnvelopeDocumentForUser(
+    userId,
+    made.envelopeId,
+    { database, storageService },
+  );
+
+  assert.notDeepEqual(new Uint8Array(document.body), sourcePdf);
+
+  const draft = await getPrepareEnvelopeDataForUser(userId, made.envelopeId, {
+    database,
+  });
+
+  assert.ok(draft);
+  // Only the signers' fields are on the envelope; the prefilled values are
+  // part of its document.
+  assert.deepEqual(draft.fields.map((field) => field.type).sort(), [
+    "signature",
+    "signature",
+  ]);
+
+  // Two drafts from one template never share field ids.
+  const second = await createDraftFromTemplate(
+    userId,
+    templateId,
+    { ...people, prefill: { "fee-box": "3000" } },
+    { database, storageService },
+  );
+  const secondDraft = await getPrepareEnvelopeDataForUser(
+    userId,
+    second.envelopeId,
+    { database },
+  );
+
+  assert.ok(secondDraft);
+  assert.equal(
+    secondDraft.fields.some((field) =>
+      draft.fields.some((other) => other.id === field.id),
+    ),
+    false,
+  );
+});
+
+test("a template with a required prefill box cannot be sent to many", async () => {
+  const userId = await createUser();
+  const { templateId } = await createEditedTemplate(userId);
+  const template = await getTemplateForBulkSend(userId, templateId, database, {
+    checkDropdownReadability: false,
+  });
+
+  assert.ok(template);
+  assert.match(
+    describeBulkSendPrefillProblem(template.prefillFields) ?? "",
+    /one envelope at a time/,
   );
 });

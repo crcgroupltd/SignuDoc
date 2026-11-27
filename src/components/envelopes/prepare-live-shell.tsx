@@ -75,10 +75,40 @@ import { getSignerPalette } from "./signer-palette";
 
 type PrepareFieldType = FieldPlacement["type"];
 
+/**
+ * Where the field editor saves and goes. An envelope uses its own routes;
+ * the template editor passes its own, with an extra assignee for the boxes
+ * the sender fills in before sending.
+ */
+export type PrepareCanvasTarget = {
+  backHref: string;
+  /** The draft whose just-uploaded PDF the browser may still hold; null skips the lookup. */
+  cachedPdfId: string | null;
+  doneHref: string;
+  doneLabel: string;
+  fieldsUrl: string;
+  /** The assignee id of prefill boxes, when there are any. */
+  prefillAssigneeId: string | null;
+  stepLabel: string;
+};
+
+function envelopeCanvasTarget(envelopeId: string): PrepareCanvasTarget {
+  return {
+    backHref: `/envelopes/${envelopeId}/signers`,
+    cachedPdfId: envelopeId,
+    doneHref: `/envelopes/${envelopeId}/review`,
+    doneLabel: "Next →",
+    fieldsUrl: `/api/envelopes/${envelopeId}/fields`,
+    prefillAssigneeId: null,
+    stepLabel: "Step 3 of 4",
+  };
+}
+
 type PrepareLiveShellProps = {
   envelopeId: string;
   initialState?: "error";
   record?: PrepareEnvelopeData;
+  target?: PrepareCanvasTarget;
 };
 
 type PrepareField = FieldPlacement & {
@@ -123,6 +153,8 @@ type SignerCardProps = {
   fieldCount: number;
   hasSignatureField: boolean;
   isActive: boolean;
+  /** The assignee of boxes the sender fills in, who signs nothing. */
+  isPrefill: boolean;
   onSelect: () => void;
   signer: PrepareShellSigner;
 };
@@ -137,6 +169,8 @@ type FieldEditorProps = {
   field: PrepareField;
   /** How many radio buttons share this field's group, itself included. */
   groupSize: number;
+  /** Filled in by the sender before sending: its label is the question asked. */
+  isPrefill: boolean;
   onAddRadioButton: () => void;
   onDelete: () => void;
   onSetLabel: (label: string | undefined) => void;
@@ -234,6 +268,20 @@ const fieldTools: readonly FieldTool[] = [
     type: "radio",
   },
 ] as const;
+
+/** Field types the sender cannot fill in for a signer. */
+const NON_PREFILL_TYPES: ReadonlySet<PrepareFieldType> = new Set([
+  "signature",
+  "initials",
+]);
+
+// The tools for boxes the sender fills in before sending: no signature or
+// initials, and a date the sender picks rather than the day of signing.
+const prefillFieldTools: readonly FieldTool[] = fieldTools
+  .filter((tool) => !NON_PREFILL_TYPES.has(tool.type))
+  .map((tool) =>
+    tool.type === "date" ? { ...tool, label: "Date (you pick)" } : tool,
+  );
 
 // Fields the sender may leave optional. A signature, initials, the date and
 // the name are always needed.
@@ -388,28 +436,37 @@ export function PrepareLiveShell({
   envelopeId,
   initialState,
   record,
+  target = envelopeCanvasTarget(envelopeId),
 }: PrepareLiveShellProps) {
   if (initialState === "error" || !record) {
-    return <PrepareLiveShellError envelopeId={envelopeId} />;
+    return <PrepareLiveShellError target={target} />;
   }
 
-  if (buildLiveSigners(record.signers).length === 0) {
-    return <PrepareLiveShellNoSigners envelopeId={envelopeId} />;
+  if (
+    buildLiveSigners(record.signers).filter(
+      (signer) => signer.id !== target.prefillAssigneeId,
+    ).length === 0
+  ) {
+    return <PrepareLiveShellNoSigners target={target} />;
   }
 
-  return <PrepareLiveShellContent envelopeId={envelopeId} record={record} />;
+  return <PrepareLiveShellContent record={record} target={target} />;
 }
 
 // Every recipient is an approver, who has no fields: there is nobody to
 // prepare the document for until a signer is added.
-function PrepareLiveShellNoSigners({ envelopeId }: { envelopeId: string }) {
+function PrepareLiveShellNoSigners({
+  target,
+}: {
+  target: PrepareCanvasTarget;
+}) {
   return (
     <CanvasShell
-      backHref={`/envelopes/${envelopeId}/signers`}
+      backHref={target.backHref}
       backLabel="Back"
       nextDisabled
-      nextLabel="Next →"
-      stepLabel="Step 3 of 4"
+      nextLabel={target.doneLabel}
+      stepLabel={target.stepLabel}
       title='"Document"'
     >
       <div className="flex min-h-[calc(100vh-73px)] items-center justify-center p-4 sm:p-6 lg:p-8">
@@ -423,7 +480,7 @@ function PrepareLiveShellNoSigners({ envelopeId }: { envelopeId: string }) {
           </p>
           <a
             className="mt-7 inline-block text-sm font-semibold text-(--accent)"
-            href={`/envelopes/${envelopeId}/signers`}
+            href={target.backHref}
           >
             Back to recipients
           </a>
@@ -433,14 +490,14 @@ function PrepareLiveShellNoSigners({ envelopeId }: { envelopeId: string }) {
   );
 }
 
-function PrepareLiveShellError({ envelopeId }: { envelopeId: string }) {
+function PrepareLiveShellError({ target }: { target: PrepareCanvasTarget }) {
   return (
     <CanvasShell
-      backHref={`/envelopes/${envelopeId}/signers`}
+      backHref={target.backHref}
       backLabel="Back"
       nextDisabled
-      nextLabel="Next →"
-      stepLabel="Step 3 of 4"
+      nextLabel={target.doneLabel}
+      stepLabel={target.stepLabel}
       title='"Document"'
     >
       <div className="flex min-h-[calc(100vh-73px)] items-center justify-center p-4 sm:p-6 lg:p-8">
@@ -468,13 +525,15 @@ function PrepareLiveShellError({ envelopeId }: { envelopeId: string }) {
 }
 
 function PrepareLiveShellContent({
-  envelopeId,
   record,
+  target,
 }: {
-  envelopeId: string;
   record: PrepareEnvelopeData;
+  target: PrepareCanvasTarget;
 }) {
   const signers = buildLiveSigners(record.signers);
+  const isPrefill = (signerId: string) =>
+    target.prefillAssigneeId !== null && signerId === target.prefillAssigneeId;
   const initialFields = buildLiveFields(record.fields);
   const [activePage, setActivePage] = useState(1);
   const [selectedSignerId, setSelectedSignerId] = useState(
@@ -517,7 +576,8 @@ function PrepareLiveShellContent({
 
   currentFieldsRef.current = fields;
 
-  const backHref = `/envelopes/${envelopeId}/signers`;
+  const backHref = target.backHref;
+  const fieldsUrl = target.fieldsUrl;
 
   const pageCount = record.pages.length;
   const pageFields = fields.filter((field) => field.page === activePage);
@@ -532,6 +592,7 @@ function PrepareLiveShellContent({
     signers.find((signer) => signer.id === selectedSignerId) ?? signers[0];
   const missingSignatureSigner = signers.find(
     (signer) =>
+      !isPrefill(signer.id) &&
       !fields.some(
         (field) => field.signerId === signer.id && field.type === "signature",
       ),
@@ -547,6 +608,24 @@ function PrepareLiveShellContent({
       )
     : null;
   const canContinue = missingSignatureSigner == null && choiceProblem == null;
+  const availableTools = isPrefill(selectedSignerId)
+    ? prefillFieldTools
+    : fieldTools;
+
+  // Choosing the prefill assignee puts down a signature or initials tool:
+  // the sender cannot sign for someone else.
+  function selectAssignee(signerId: string) {
+    setSelectedSignerId(signerId);
+
+    if (isPrefill(signerId) && armedTool && NON_PREFILL_TYPES.has(armedTool)) {
+      setArmedTool(null);
+    }
+  }
+  // Signatures and initials can only go to a signer, never be prefilled.
+  const editorSigners =
+    selectedField && NON_PREFILL_TYPES.has(selectedField.type)
+      ? signers.filter((signer) => !isPrefill(signer.id))
+      : signers;
   const selectedGroupSize = selectedField
     ? fields.filter((field) => isSameChoice(selectedField, field)).length
     : 0;
@@ -577,7 +656,9 @@ function PrepareLiveShellContent({
 
     async function resolvePreferredDocumentUrl() {
       try {
-        const cachedPdfBlob = await getCachedDraftPdfBlob(envelopeId);
+        const cachedPdfBlob = target.cachedPdfId
+          ? await getCachedDraftPdfBlob(target.cachedPdfId)
+          : null;
 
         if (!isActive) {
           return;
@@ -606,7 +687,7 @@ function PrepareLiveShellContent({
         URL.revokeObjectURL(localDocumentUrl);
       }
     };
-  }, [envelopeId, record.pdfUrl]);
+  }, [target.cachedPdfId, record.pdfUrl]);
 
   useEffect(() => {
     // Leaving the page before the autosave ran would drop the last change.
@@ -632,7 +713,7 @@ function PrepareLiveShellContent({
       // saves again, instead of having its next save refused.
       saveChainRef.current = saveChainRef.current.then(async () => {
         try {
-          const response = await fetch(`/api/envelopes/${envelopeId}/fields`, {
+          const response = await fetch(fieldsUrl, {
             body: JSON.stringify({
               ...buildFieldRequest(unsaved),
               expectedRevision: fieldsRevisionRef.current,
@@ -673,7 +754,7 @@ function PrepareLiveShellContent({
       // A link inside the app (the header, say) unmounts it instead.
       flushUnsavedFields();
     };
-  }, [envelopeId]);
+  }, [fieldsUrl]);
 
   useEffect(() => {
     if (!selectedFieldId) {
@@ -744,7 +825,7 @@ function PrepareLiveShellContent({
     setSaveError(null);
     setSaveState("saving");
 
-    const response = await fetch(`/api/envelopes/${envelopeId}/fields`, {
+    const response = await fetch(fieldsUrl, {
       body: JSON.stringify({
         ...buildFieldRequest(nextFields),
         expectedRevision: fieldsRevisionRef.current,
@@ -835,7 +916,7 @@ function PrepareLiveShellContent({
 
     try {
       const currentSignature = serializeFieldRequest(fields);
-      let redirectPath = `/envelopes/${envelopeId}/review`;
+      let redirectPath = target.doneHref;
 
       if (currentSignature !== lastSavedSignatureRef.current) {
         const saveResult = await persistFields(fields);
@@ -941,11 +1022,11 @@ function PrepareLiveShellContent({
       backHref={backHref}
       backLabel="Back"
       nextDisabled={!canContinue}
-      nextLabel="Next →"
+      nextLabel={target.doneLabel}
       nextLoading={isContinuing}
       onBack={(event) => void handleBack(event)}
       onNext={handleContinue}
-      stepLabel="Step 3 of 4"
+      stepLabel={target.stepLabel}
       title={`"${record.title}"`}
     >
       <div className="grid min-h-[calc(100vh-73px)] lg:grid-cols-[272px_minmax(0,1fr)_304px]">
@@ -954,7 +1035,7 @@ function PrepareLiveShellContent({
             <section className="panel space-y-3 rounded-[1.25rem] p-4">
               <p className="section-eyebrow px-1">Fields</p>
               <div className="grid gap-2">
-                {fieldTools.map((tool) => (
+                {availableTools.map((tool) => (
                   <FieldToolButton
                     isActive={armedTool === tool.type}
                     key={tool.type}
@@ -994,8 +1075,9 @@ function PrepareLiveShellContent({
                         (field) => field.type === "signature",
                       )}
                       isActive={selectedSignerId === signer.id}
+                      isPrefill={isPrefill(signer.id)}
                       key={signer.id}
-                      onSelect={() => setSelectedSignerId(signer.id)}
+                      onSelect={() => selectAssignee(signer.id)}
                       signer={signer}
                     />
                   );
@@ -1089,7 +1171,7 @@ function PrepareLiveShellContent({
                 <select
                   aria-label="Selected signer"
                   className="field-input"
-                  onChange={(event) => setSelectedSignerId(event.target.value)}
+                  onChange={(event) => selectAssignee(event.target.value)}
                   value={selectedSignerId}
                 >
                   {signers.map((signer) => (
@@ -1176,6 +1258,7 @@ function PrepareLiveShellContent({
                             setArmedTool,
                             setFields,
                             setSelectedFieldId,
+                            isPrefill(selectedSignerId),
                           )
                         }
                         type="button"
@@ -1215,7 +1298,9 @@ function PrepareLiveShellContent({
                           label={
                             field.type === "radio" && field.label
                               ? `Radio button: ${field.label}`
-                              : getFieldTool(field.type).placeholderLabel
+                              : isPrefill(field.signerId) && field.label
+                                ? field.label
+                                : getFieldTool(field.type).placeholderLabel
                           }
                           onInteractionChange={setIsFieldInteracting}
                           onMove={(deltaX, deltaY) =>
@@ -1270,8 +1355,9 @@ function PrepareLiveShellContent({
                 {...fieldEditorActions}
                 field={selectedField}
                 groupSize={selectedGroupSize}
+                isPrefill={isPrefill(selectedField.signerId)}
                 key={selectedField.id}
-                signers={signers}
+                signers={editorSigners}
               />
             </div>
           ) : null}
@@ -1294,8 +1380,9 @@ function PrepareLiveShellContent({
                     {...fieldEditorActions}
                     field={selectedField}
                     groupSize={selectedGroupSize}
+                    isPrefill={isPrefill(selectedField.signerId)}
                     key={selectedField.id}
-                    signers={signers}
+                    signers={editorSigners}
                   />
                 ) : (
                   <EmptyFieldInspector
@@ -1318,6 +1405,7 @@ function PrepareLiveShellContent({
         <MobileFieldToolsSheet
           armedTool={armedTool}
           onClose={() => setIsMobileToolsOpen(false)}
+          tools={availableTools}
           onSelectTool={(tool) =>
             handleToolSelect(
               tool,
@@ -1350,6 +1438,7 @@ type MobileFieldToolsSheetProps = {
   onClose: () => void;
   onSelectTool: (tool: PrepareFieldType) => void;
   returnFocusRef: RefObject<HTMLButtonElement | null>;
+  tools: readonly FieldTool[];
 };
 
 /**
@@ -1364,6 +1453,7 @@ function MobileFieldToolsSheet({
   onClose,
   onSelectTool,
   returnFocusRef,
+  tools,
 }: MobileFieldToolsSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const doneRef = useRef<HTMLButtonElement>(null);
@@ -1466,7 +1556,7 @@ function MobileFieldToolsSheet({
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
           <div className="grid gap-2 sm:grid-cols-2">
-            {fieldTools.map((tool) => (
+            {tools.map((tool) => (
               <FieldToolButton
                 isActive={armedTool === tool.type}
                 key={`mobile-${tool.type}`}
@@ -1520,6 +1610,7 @@ function SignerCard({
   fieldCount,
   hasSignatureField,
   isActive,
+  isPrefill,
   onSelect,
   signer,
 }: SignerCardProps) {
@@ -1551,13 +1642,19 @@ function SignerCard({
           <p className="mt-0.5 text-xs text-(--secondary)">
             {fieldCount} field{fieldCount === 1 ? "" : "s"} placed
           </p>
-          <p
-            className={`mt-1.5 text-xs font-bold ${
-              hasSignatureField ? "text-(--success)" : "text-(--danger)"
-            }`}
-          >
-            {hasSignatureField ? "Signature ready" : "Signature needed"}
-          </p>
+          {isPrefill ? (
+            <p className="mt-1.5 text-xs font-bold text-(--secondary)">
+              You fill these in when sending
+            </p>
+          ) : (
+            <p
+              className={`mt-1.5 text-xs font-bold ${
+                hasSignatureField ? "text-(--success)" : "text-(--danger)"
+              }`}
+            >
+              {hasSignatureField ? "Signature ready" : "Signature needed"}
+            </p>
+          )}
         </div>
       </div>
     </button>
@@ -1701,6 +1798,7 @@ function SaveStatusIndicator({
 function FieldEditor({
   field,
   groupSize,
+  isPrefill,
   onAddRadioButton,
   onDelete,
   onSetLabel,
@@ -1710,7 +1808,8 @@ function FieldEditor({
   signers,
 }: FieldEditorProps) {
   const tool = getFieldTool(field.type);
-  const isOptionalField = canBeOptional(field.type);
+  // A prefill box of any kind may be left empty by the sender.
+  const isOptionalField = canBeOptional(field.type) || isPrefill;
   // What is being typed, kept as typed. The field itself holds the tidied
   // value, and saving hands that back; without a copy of its own the box
   // would lose a trailing space or an empty line in mid-thought. The editor
@@ -1805,6 +1904,38 @@ function FieldEditor({
               {optionCount < 2
                 ? "One choice per line. Add at least two."
                 : `One choice per line. ${String(optionCount)} of up to ${String(MAX_FIELD_OPTIONS)}. The signer picks one.`}
+            </p>
+          </div>
+        ) : null}
+
+        {isPrefill && field.type !== "radio" ? (
+          <div>
+            <label
+              className="block px-1 text-[0.8125rem] font-semibold text-(--secondary)"
+              htmlFor={labelId}
+            >
+              What to ask when sending
+            </label>
+            <input
+              aria-describedby={`${labelId}-help`}
+              className="field-input mt-2"
+              id={labelId}
+              maxLength={120}
+              onChange={(event) => {
+                setLabelDraft(event.target.value);
+                onSetLabel(
+                  toWellFormedText(event.target.value).trim() || undefined,
+                );
+              }}
+              placeholder="Client name"
+              value={shownLabel}
+            />
+            <p
+              className="mt-1.5 px-1 text-xs leading-5 text-(--tertiary)"
+              id={`${labelId}-help`}
+            >
+              Shown on the form you fill in when using this template. What you
+              enter is written into the document before it is sent.
             </p>
           </div>
         ) : null}
@@ -1917,6 +2048,7 @@ function placeField(
   setArmedTool: Dispatch<SetStateAction<PrepareFieldType | null>>,
   setFields: Dispatch<SetStateAction<PrepareField[]>>,
   setSelectedFieldId: Dispatch<SetStateAction<string | null>>,
+  isPrefill = false,
 ) {
   const pageRect = event.currentTarget.getBoundingClientRect();
   const tool = getFieldTool(armedTool);
@@ -1939,7 +2071,14 @@ function placeField(
       typeof window !== "undefined" && "crypto" in window
         ? window.crypto.randomUUID()
         : `field-${fieldCounterRef.current}`,
-    label: tool.type === "radio" ? "Option 1" : undefined,
+    // A prefill box starts with its kind as the question; the sender of
+    // the template names it in the inspector.
+    label:
+      tool.type === "radio"
+        ? "Option 1"
+        : isPrefill
+          ? tool.label.replace(/ \(you pick\)$/, "")
+          : undefined,
     options: tool.type === "dropdown" ? [] : undefined,
     page: activePage,
     // Text, number and checkbox fields start optional; a dropdown or a

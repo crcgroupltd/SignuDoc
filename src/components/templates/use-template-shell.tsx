@@ -7,7 +7,10 @@ import { ShellButton } from "@/components/shared/form-shell";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusPanel } from "@/components/shared/status-panel";
 import { duplicateSignerEmailMessage } from "@/lib/schemas/signer";
+import type { PrefillValues } from "@/lib/schemas/template";
 import type { UseTemplateData } from "@/lib/templates";
+
+import { findMissingPrefill, PrefillInputs } from "./prefill-inputs";
 
 type UseTemplateShellProps = {
   /** Shown in place of the form when the template cannot be used. */
@@ -66,6 +69,11 @@ export function UseTemplateShell({
   const [people, setPeople] = useState<Person[]>(() =>
     (template?.roles ?? []).map(() => ({ email: "", name: "" })),
   );
+  const [prefill, setPrefill] = useState<PrefillValues>({});
+  const [prefillError, setPrefillError] = useState<{
+    fieldId: string;
+    message: string;
+  } | null>(null);
   const [showErrors, setShowErrors] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -90,8 +98,31 @@ export function UseTemplateShell({
   const errors = findErrors(people);
   const titleError =
     title.trim().length === 0 ? "Give the envelope a title" : undefined;
+  const prefillFields = template.prefillFields;
   const canSubmit =
-    !titleError && errors.every((error) => !error.name && !error.email);
+    !titleError &&
+    errors.every((error) => !error.name && !error.email) &&
+    findMissingPrefill(prefillFields, prefill) === undefined;
+
+  function updatePrefill(fieldId: string, value: string | boolean) {
+    setSubmitError(null);
+    setPrefillError(null);
+    setPrefill((current) => ({ ...current, [fieldId]: value }));
+  }
+
+  function chooseRadio(groupFieldIds: readonly string[], chosenId: string) {
+    setSubmitError(null);
+    setPrefillError(null);
+    setPrefill((current) => {
+      const next = { ...current };
+
+      for (const id of groupFieldIds) {
+        next[id] = id === chosenId;
+      }
+
+      return next;
+    });
+  }
 
   function updatePerson(index: number, patch: Partial<Person>) {
     setSubmitError(null);
@@ -115,16 +146,21 @@ export function UseTemplateShell({
 
     try {
       const response = await fetch(`/api/templates/${template.id}/use`, {
-        body: JSON.stringify({ signers: people, title }),
+        body: JSON.stringify({ prefill, signers: people, title }),
         headers: { "content-type": "application/json" },
         method: "POST",
       });
       const payload = (await response.json().catch(() => null)) as {
         error?: string;
+        fieldId?: string;
         redirectPath?: string;
       } | null;
 
       if (!response.ok || !payload?.redirectPath) {
+        if (payload?.fieldId && payload.error) {
+          setPrefillError({ fieldId: payload.fieldId, message: payload.error });
+        }
+
         setSubmitError(payload?.error ?? genericError);
         setIsSubmitting(false);
         return;
@@ -286,6 +322,18 @@ export function UseTemplateShell({
             })}
           </ol>
         </div>
+
+        {prefillFields.length > 0 ? (
+          <PrefillInputs
+            disabled={isSubmitting}
+            fieldError={prefillError}
+            fields={prefillFields}
+            onChange={updatePrefill}
+            onChooseRadio={chooseRadio}
+            showErrors={showErrors}
+            values={prefill}
+          />
+        ) : null}
 
         <p className="text-sm leading-6 text-(--secondary)">
           Nothing is sent yet. You will see the review step next, where you can

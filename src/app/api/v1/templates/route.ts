@@ -16,6 +16,14 @@ export async function GET(request: Request) {
           id: template.id,
           name: template.name,
           object: "template",
+          // Boxes to give values for, by id, in "prefill" when using it.
+          prefill: template.prefillFields.map((field) => ({
+            id: field.id,
+            label: field.label ?? null,
+            ...(field.options ? { options: field.options } : {}),
+            required: field.required,
+            type: field.type,
+          })),
           roles: template.roleNames,
         })),
         object: "list",

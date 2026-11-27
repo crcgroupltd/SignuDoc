@@ -40,6 +40,7 @@ import {
 import { readStoredSettings } from "./settings.ts";
 import {
   createDraftFromTemplate,
+  describeBulkSendPrefillProblem,
   describeTemplateDropdownProblem,
   describeUnsendableTemplate,
   getTemplateForBulkSend,
@@ -765,6 +766,7 @@ export async function bulkSendFromTemplate(
 
   const unsendable =
     describeUnsendableTemplate(template.roles, template.fields) ??
+    describeBulkSendPrefillProblem(template.prefillFields) ??
     (await describeTemplateDropdownProblem(
       template.roles,
       template.fields,

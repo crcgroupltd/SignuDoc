@@ -11,7 +11,7 @@
    - a bad deployment: promote the previous one.
 4. **Assess** which records and people are affected, using both audit trails and the SIEM.
 5. **Notify** affected customers within `[72 hours]` of confirming an incident that affects their data, and regulators where the law requires.
-6. **Recover**, from backup if needed ([Backup and restore](../../backup-and-restore.md)).
+6. **Recover**, from backup if needed ([Backup and restore](../../self-hosting.md#backups)).
 7. **Close** with a written review: cause, impact, fixes, and follow-up actions with owners.
 8. **Test** this plan once a year with a tabletop exercise.
 

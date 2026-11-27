@@ -1,23 +1,132 @@
-# Local Postgres for development and the end-to-end test.
-#   npm run db:start    start it and apply migrations
-#   npm run db:stop     stop it (data is kept)
-#   npm run db:reset    wipe it and start fresh
+# SignuDoc: the app and its Postgres database.
+#
+#   docker compose up -d --build     build and start (migrations run on start)
+#   docker compose logs -f app       follow the app's logs
+#   docker compose down              stop (data is kept in the volumes)
+#
+# Every setting is in this file: there is no .env file. Replace each
+# CHANGE_ME before the first start. Put your own reverse proxy in front of
+# port 3000 to serve HTTPS (see docs/self-hosting.md).
+#
+# For local development's database only, use compose.dev.yml instead
+# (npm run db:start).
+
 services:
   db:
     image: postgres:17
+    restart: unless-stopped
     environment:
       POSTGRES_USER: signudoc
-      POSTGRES_PASSWORD: signudoc
+      # Change this, and the same password in the app's DATABASE_URL below.
+      POSTGRES_PASSWORD: CHANGE_ME_db_password
       POSTGRES_DB: signudoc
-    ports:
-      - "127.0.0.1:5432:5432"
+    # No published port: only the app reaches the database.
     volumes:
       - signudoc-db:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U signudoc -d signudoc"]
-      interval: 2s
+      interval: 5s
       timeout: 3s
       retries: 30
 
+  app:
+    build: .
+    image: signudoc:local
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      # Point your reverse proxy here. Use "127.0.0.1:3000:3000" if the
+      # proxy runs on this same machine, so the app is not reachable directly.
+      - "3000:3000"
+    volumes:
+      # Uploaded and signed PDFs. Back this up with the database.
+      - signudoc-files:/data
+    environment:
+      # ----------------------------------------------------------------------
+      # Required
+      # ----------------------------------------------------------------------
+
+      # Postgres, on the db service above. Same password as POSTGRES_PASSWORD.
+      DATABASE_URL: postgres://signudoc:CHANGE_ME_db_password@db:5432/signudoc
+
+      # The public HTTPS address your reverse proxy serves, with no trailing
+      # slash. Used for links in emails and for sign-in.
+      APP_URL: https://sign.example.com
+
+      # At least 32 characters: `openssl rand -hex 32`. Keep it stable: it
+      # signs sessions and encrypts the PDF sealing key.
+      BETTER_AUTH_SECRET: CHANGE_ME_run_openssl_rand_hex_32
+
+      # The first person to open /setup becomes the administrator. With this
+      # set, setup asks for it, so finding the URL first is not enough.
+      SETUP_TOKEN: CHANGE_ME_setup_token
+
+      # Email is sent through Resend (resend.com). Verify a sending domain
+      # there; Settings, Organization in the app shows its status.
+      RESEND_API_KEY: CHANGE_ME_resend_api_key
+
+      # PDFs are kept on the signudoc-files volume. Leave these as they are.
+      STORAGE_DRIVER: local
+      STORAGE_LOCAL_DIR: /data/storage
+
+      # ----------------------------------------------------------------------
+      # Optional: uncomment to use
+      # ----------------------------------------------------------------------
+
+      # Fix the sending and support addresses here instead of in the app.
+      # They then cannot be changed under Settings, Organization.
+      # RESEND_FROM_EMAIL: SignuDoc <sign@example.com>
+      # SUPPORT_EMAIL: support@example.com
+      # Resend region: us-east-1 (default), eu-west-1, sa-east-1, ap-northeast-1.
+      # RESEND_REGION: eu-west-1
+
+      # Background jobs run inside the app: the daily cleanup and deadline
+      # expiry, and webhook retries every 5 minutes. "off" stops them.
+      # JOB_SCHEDULER: "off"
+      # WEBHOOK_RETRY_MINUTES: "5"
+      # A secret for calling /api/internal/retention and /api/internal/webhooks
+      # from outside. Unset, they stay open but rate limited and say nothing.
+      # RETENTION_JOB_SECRET: CHANGE_ME
+
+      # The most signers one envelope can have, 1 to 100 (default 25).
+      # MAX_SIGNERS_PER_ENVELOPE: "25"
+
+      # Seal finished PDFs with a certificate from a certificate authority
+      # (base64 .p12) instead of the self-signed one made on first use, and
+      # add a trusted timestamp.
+      # SEAL_P12_BASE64:
+      # SEAL_P12_PASSWORD:
+      # SEAL_TIMESTAMP_URL: http://timestamp.digicert.com
+
+      # Single sign-on over OpenID Connect. Redirect URI to register with the
+      # provider: <APP_URL>/api/auth/callback/sso
+      # SSO_ISSUER: https://acme.okta.com
+      # SSO_CLIENT_ID:
+      # SSO_CLIENT_SECRET:
+      # SSO_NAME: Okta
+      # PASSWORD_SIGN_IN: "off"
+      # PASSWORD_SIGN_IN_ALLOWED_EMAILS: admin@example.com
+
+      # Signatures in the signers' own names (eIDAS) through eID Easy or a
+      # CSC API v2 provider. See docs/self-hosting.md.
+      # EIDEASY_CLIENT_ID:
+      # EIDEASY_SECRET:
+      # EIDEASY_API_URL: https://test.eideasy.com
+      # CSC_API_URL:
+      # CSC_CLIENT_ID:
+      # CSC_CLIENT_SECRET:
+      # CSC_PROVIDER_NAME:
+      # CSC_OAUTH_URL:
+      # SIGNING_PROVIDER: eideasy
+
+      # Audit rows are also written to the logs as JSON lines; "off" stops it.
+      # AUDIT_LOG: "off"
+
+      # Run as a public service: landing page, built-in terms, open sign-up.
+      # HOSTED_MODE: "1"
+
 volumes:
   signudoc-db:
+  signudoc-files:

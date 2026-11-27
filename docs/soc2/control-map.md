@@ -70,7 +70,7 @@ Where a row says "evidence", it names what you can show an auditor.
 
 | Criterion                  | SignuDoc                                                                                                      | Vendors                                  | Yours                                                                                                                                  |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| CC9.1 Business disruption  | Daily backup to a second Blob store, and a scripted restore ([backup and restore](../backup-and-restore.md)). | Neon point-in-time restore on your plan. | Recovery objectives, a tested restore, and continuity of the people who can run it ([backup policy](policies/backup-and-recovery.md)). |
+| CC9.1 Business disruption  | Daily backup to a second Blob store, and a scripted restore ([backup and restore](../self-hosting.md#backups)). | Neon point-in-time restore on your plan. | Recovery objectives, a tested restore, and continuity of the people who can run it ([backup policy](policies/backup-and-recovery.md)). |
 | CC9.2 Vendors and partners | [Vendor duties](vendor-duties.md) lists each service and its report.                                          | Their SOC 2 reports and terms.           | A vendor review each year ([vendor management policy](policies/vendor-management.md)).                                                 |
 
 ## A1 Availability

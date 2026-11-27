@@ -6,7 +6,7 @@ Issues and pull requests are welcome.
 
 1. Fork the repository and clone your fork.
 2. Install dependencies: `npm install`
-3. Copy the environment file: `cp .env.example .env`
+3. Create `.env.local` as described in [Development](./docs/development.md), and start the database: `npm run db:start`
 4. Start the dev server: `npm run dev`
 
 See [Development](./docs/development.md) for full setup details.

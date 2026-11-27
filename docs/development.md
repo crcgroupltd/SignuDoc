@@ -16,13 +16,17 @@ SignuDoc targets Node.js 24 and is built on Next.js 16.
 
 ### 2. Create your environment file
 
+Create `.env.local` in the project root with:
+
 ```bash
-cp .env.example .env
+DATABASE_URL=postgres://signudoc:signudoc@127.0.0.1:5432/signudoc
+APP_URL=http://localhost:3000
+EMAIL_DRIVER=capture
 ```
 
-The example file is ready for local development as it is. Uploaded PDFs are kept on disk under `.data/storage` and outgoing email is written to `.data/outbox` as JSON files instead of being sent, so you need no storage or email account to try the whole product.
+That is all local development needs. Uploaded PDFs are kept on disk under `.data/storage` and outgoing email is written to `.data/outbox` as JSON files instead of being sent, so you need no storage or email account to try the whole product.
 
-Every setting, and which ones are optional, is described in `.env.example`.
+Every setting, and which ones are optional, is described in `docker-compose.yml` and the [self-hosting guide](self-hosting.md#settings).
 
 ### 3. Start the database and apply the schema
 
@@ -108,7 +112,7 @@ SignuDoc sends transactional email through Resend.
 - In hosted mode the support address is also the contact shown on the Terms, Privacy, and Accessibility pages.
 - For local development, `EMAIL_DRIVER=capture` writes each email to `.data/outbox` as a JSON file instead of sending it. Open the newest file to find a verification or signing link. Use a delivery provider for deployed sites that need to send email: on a deployed site the capture driver refuses to run, because it delivers no mail.
 
-To test a production build on your machine, set `APP_URL=http://localhost:3000` and `EMAIL_DRIVER=capture` in your local `.env`. With the example database password, sign-in also needs a `BETTER_AUTH_SECRET` of at least 32 characters. Generate one with `openssl rand -hex 32` and save its output as `BETTER_AUTH_SECRET` in the same file. Run `npm run build`, then `npm run start`.
+To test a production build on your machine, set `APP_URL=http://localhost:3000` and `EMAIL_DRIVER=capture` in your `.env.local`. With the example database password, sign-in also needs a `BETTER_AUTH_SECRET` of at least 32 characters. Generate one with `openssl rand -hex 32` and save its output as `BETTER_AUTH_SECRET` in the same file. Run `npm run build`, then `npm run start`.
 
 ## Upload constraints
 

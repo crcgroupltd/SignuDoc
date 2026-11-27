@@ -47,7 +47,7 @@ Short templates for the procedures Part 11 expects you to have. Put each into yo
 2. For each finished regulated record, the sender files the signed PDF, the certificate and the envelope's audit trail CSV in `[the record system]` within `[N]` days.
 3. If a chain check ever shows broken, stop using the install for new records and handle it as an incident.
 4. Records are kept for `[the period your predicate rules require]`. They are deleted only by hand, under `[procedure]`, after that period, with the deletion recorded.
-5. Backups of the database and of the Blob store are taken `[daily, by the built-in backup (docs/backup-and-restore.md), or how]` and a restore is tested `[how often]`.
+5. Backups of the database and of the Blob store are taken `[daily, by the built-in backup (docs/self-hosting.md#backups), or how]` and a restore is tested `[how often]`.
 
 ## SOP-6 Incidents
 

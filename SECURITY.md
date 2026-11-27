@@ -4,7 +4,7 @@
 
 If you find a security vulnerability in SignuDoc, please report it privately. **Do not put the details in a public GitHub issue, discussion or pull request.**
 
-Send your report through GitHub's private vulnerability reporting: open the [Report a vulnerability](https://github.com/NYLLON-SOFTWARE/SignuDoc/security/advisories/new) form, which is also on this repository's security advisories page. The report stays between you and the repository's maintainers. Include:
+Send your report through GitHub's private vulnerability reporting: open the [Report a vulnerability](https://github.com/crcgroupltd/SignuDoc/security/advisories/new) form, which is also on this repository's security advisories page. The report stays between you and the repository's maintainers. Include:
 
 - A description of the vulnerability.
 - Steps to reproduce or a proof of concept.
@@ -40,21 +40,6 @@ Security fixes are applied to the latest release only.
 
 - **Tests.** Typecheck, lint, unit tests, tests against a real Postgres and an end-to-end browser test (`npm run typecheck`, `npm run lint`, `npm test`, `npm run test:db`, `npm run test:e2e`) are run before changes are merged. They are not run in GitHub Actions in this repository.
 - **Image.** `.github/workflows/docker-image.yml` builds the Docker image and publishes it to GitHub Container Registry only when `main` changes. Nothing else starts it, pull requests included. It is the only workflow.
-- **Upstream checks.** The upstream project, [NYLLON-SOFTWARE/SignuDoc](https://github.com/NYLLON-SOFTWARE/SignuDoc), runs CodeQL, dependency review and OpenSSF Scorecard on its own repository.
-
-## Verifying a release
-
-Each upstream release from v0.3.0 on, at [NYLLON-SOFTWARE/SignuDoc](https://github.com/NYLLON-SOFTWARE/SignuDoc/releases), has these files attached, made by its release workflow:
-
-- `signudoc-<version>.tar.gz`: the source of the tagged commit.
-- `signudoc-<version>.cdx.json`: a software bill of materials in CycloneDX format, listing every npm package the app ships with its version and license.
-- `SHA256SUMS`: their checksums.
-
-Each file has a GitHub artifact attestation, signed through Sigstore, saying which workflow run in this repository made it from which commit. To check one with the GitHub CLI:
-
-```sh
-gh attestation verify signudoc-<version>.tar.gz -R NYLLON-SOFTWARE/SignuDoc
-```
 
 ## Recognition
 

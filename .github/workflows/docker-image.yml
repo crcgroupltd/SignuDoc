@@ -58,6 +58,8 @@ jobs:
           # Add linux/arm64 here for ARM hosts (slower: built under emulation).
           platforms: linux/amd64
           push: true
+          build-args: |
+            SIGNUDOC_COMMIT=${{ github.sha }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

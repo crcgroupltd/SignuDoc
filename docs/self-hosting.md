@@ -46,7 +46,7 @@ A new install is claimed by whoever opens it first. With `SETUP_TOKEN` set (the 
 
 ### Keep your install up to date
 
-Settings, SignuDoc, **Check for updates** tells you when a new [release](https://github.com/NYLLON-SOFTWARE/SignuDoc/releases) is out and what is in it. To take it:
+Settings, SignuDoc shows the version and commit the running image was built from. The app never checks anywhere for updates: a new version is whatever lands on this repository's `main` branch, which builds and publishes a new image. To take it:
 
 ```bash
 docker compose pull

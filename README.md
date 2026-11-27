@@ -168,7 +168,7 @@ If your agreements run through Salesforce, need SMS checks or ID document checks
 
 You need Docker with Compose, a domain name, a reverse proxy that serves HTTPS (nginx, Traefik, Caddy or similar), and an SMTP server or relay that can send email from your domain.
 
-1. **Get the code:** `git clone https://github.com/NYLLON-SOFTWARE/SignuDoc.git && cd SignuDoc`
+1. **Get the code:** `git clone https://github.com/crcgroupltd/SignuDoc.git && cd SignuDoc`
 2. **Fill in `docker-compose.yml`.** Replace every `CHANGE_ME` (database password, `BETTER_AUTH_SECRET`, `SETUP_TOKEN`, your SMTP server's login) and set `APP_URL`, `SMTP_HOST` and `SMTP_FROM`. There is no `.env` file: every setting is in the compose file.
 3. **Start it:** `docker login ghcr.io` (once, if the image is private), then `docker compose pull && docker compose up -d`. Two containers start, `app` and `db`, and the app applies the database schema by itself. The image comes from GitHub Container Registry, where `.github/workflows/docker-image.yml` publishes it on every push to `main`; `docker compose up -d --build` builds it from your checkout instead.
 4. **Point your reverse proxy at port 3000.** See [Reverse proxy](docs/self-hosting.md#reverse-proxy) for the headers and upload size it needs.

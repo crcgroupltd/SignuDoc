@@ -15,6 +15,10 @@ RUN npm run build
 
 FROM node:24-bookworm-slim AS runtime
 WORKDIR /app
+# The commit the image was built from, shown in Settings. The image workflow
+# passes it; a local build leaves it empty.
+ARG SIGNUDOC_COMMIT=""
+ENV SIGNUDOC_COMMIT=${SIGNUDOC_COMMIT}
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000 \

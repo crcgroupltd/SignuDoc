@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 
 const GENERIC_ERROR_MESSAGE = "Something went wrong. Please try again.";
 const EMBED_DOCS_URL =
-  "https://github.com/NYLLON-SOFTWARE/SignuDoc/blob/main/docs/api.md#embedded-signing";
+  "https://github.com/crcgroupltd/SignuDoc/blob/main/docs/api.md#embedded-signing";
 
 type Payload = {
   error?: string;

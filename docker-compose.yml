@@ -85,6 +85,11 @@ services:
       STORAGE_DRIVER: local
       STORAGE_LOCAL_DIR: /data/storage
 
+      # New passwords are not checked against the Have I Been Pwned breach
+      # list, so the app makes no call to api.pwnedpasswords.com. Remove this
+      # line to turn the check back on (it needs outbound HTTPS).
+      PASSWORD_BREACH_CHECK: "off"
+
       # ----------------------------------------------------------------------
       # Optional: uncomment to use
       # ----------------------------------------------------------------------

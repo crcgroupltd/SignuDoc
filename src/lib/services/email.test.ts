@@ -4,38 +4,20 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
-import type { Resend } from "resend";
-
 import {
   CAPTURE_IN_PRODUCTION_ERROR_MESSAGE,
   canSendEmail,
   createEmailService,
   createLazyEmailService,
+  defaultSenderAddress,
   isCaptureEmailDriverAllowed,
+  resolveEmailDriver,
   type EmailService,
+  type MailTransport,
 } from "./email.ts";
 
-// What the Resend client is asked to do when the service turns a request
-// away for rate. Nothing here talks to Resend.
-
-type Answer = {
-  data: { id: string } | null;
-  error: { message: string; name: string; statusCode: number } | null;
-  headers: Record<string, string> | null;
-};
-
-const RATE_LIMITED: Answer = {
-  data: null,
-  error: {
-    message:
-      "Too many requests. Please limit the number of requests per second.",
-    name: "rate_limit_exceeded",
-    statusCode: 429,
-  },
-  headers: { "retry-after": "1" },
-};
-
-const SENT: Answer = { data: { id: "email_1" }, error: null, headers: {} };
+// What the SMTP transport is asked to send. Nothing here talks to a mail
+// server.
 
 const MESSAGE = {
   subject: "Your signed copy",
@@ -44,101 +26,126 @@ const MESSAGE = {
   to: "signer@example.test",
 };
 
-/** An email service whose Resend client gives these answers, in order. */
-function serviceAnswering(answers: Answer[]) {
-  const waits: number[] = [];
-  let requests = 0;
-  const next = async () => {
-    const answer = answers[Math.min(requests, answers.length - 1)];
+type SentMail = Parameters<MailTransport["sendMail"]>[0];
 
-    requests += 1;
-
-    return answer;
-  };
+function serviceWithTransport(
+  answer: (mail: SentMail) => Awaited<ReturnType<MailTransport["sendMail"]>>,
+) {
+  const sent: SentMail[] = [];
   const service = createEmailService({
-    resendClient: {
-      batch: { send: next },
-      emails: { send: next },
-    } as unknown as Resend,
     resolveAddresses: async () => ({
       senderAddress: "Example <hello@example.test>",
-      supportAddress: null,
+      supportAddress: "help@example.test",
     }),
-    wait: async (milliseconds) => {
-      waits.push(milliseconds);
+    transport: {
+      async sendMail(mail) {
+        sent.push(mail);
+        return answer(mail);
+      },
+      async verify() {
+        return true;
+      },
     },
   });
 
-  return { requests: () => requests, service, waits };
+  return { sent, service };
 }
 
-test("a message Resend turns away for rate is sent again after the wait it names", async () => {
-  const { requests, service, waits } = serviceAnswering([
-    RATE_LIMITED,
-    { ...RATE_LIMITED, headers: { "retry-after": "2" } },
-    SENT,
-  ]);
+test("a message goes to the SMTP server with its sender, reply-to and attachments", async () => {
+  const { sent, service } = serviceWithTransport(() => ({
+    accepted: ["signer@example.test"],
+    messageId: "<m-1@example.test>",
+    rejected: [],
+  }));
 
-  const delivery = await service.send(MESSAGE);
-
-  assert.equal(delivery.messageId, "email_1");
-  assert.equal(requests(), 3);
-  assert.deepEqual(waits, [1000, 2000]);
-});
-
-test("a rate limit that does not clear is reported after a few tries", async () => {
-  const { requests, service, waits } = serviceAnswering([RATE_LIMITED]);
-
-  await assert.rejects(service.send(MESSAGE), /Too many requests/);
-  // The first try and three more.
-  assert.equal(requests(), 4);
-  assert.equal(waits.length, 3);
-});
-
-test("the wait is a second when Resend names none, and is never long", async () => {
-  const { service, waits } = serviceAnswering([
-    { ...RATE_LIMITED, headers: null },
-    { ...RATE_LIMITED, headers: { "retry-after": "3600" } },
-    SENT,
-  ]);
-
-  await service.send(MESSAGE);
-
-  assert.deepEqual(waits, [1000, 5000]);
-});
-
-test("a used-up quota is reported at once: waiting a second does not bring it back", async () => {
-  const { requests, service, waits } = serviceAnswering([
-    {
-      data: null,
-      error: {
-        message: "You have exceeded your daily email sending quota.",
-        name: "daily_quota_exceeded",
-        statusCode: 429,
+  const delivery = await service.send({
+    ...MESSAGE,
+    attachments: [
+      {
+        content: new Uint8Array([1, 2, 3]),
+        contentType: "application/pdf",
+        filename: "signed.pdf",
       },
-      headers: { "retry-after": "1" },
-    },
-  ]);
+    ],
+    htmlBody: "<p>Attached.</p>",
+  });
 
-  await assert.rejects(service.send(MESSAGE), /daily email sending quota/);
-  assert.equal(requests(), 1);
-  assert.deepEqual(waits, []);
+  assert.equal(delivery.messageId, "<m-1@example.test>");
+  assert.deepEqual(delivery.accepted, ["signer@example.test"]);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0]?.from, "Example <hello@example.test>");
+  assert.equal(sent[0]?.replyTo, "help@example.test");
+  assert.equal(sent[0]?.to, "signer@example.test");
+  assert.equal(sent[0]?.subject, "Your signed copy");
+  assert.equal(sent[0]?.html, "<p>Attached.</p>");
+  assert.equal(sent[0]?.text, "Attached.");
+  assert.deepEqual(sent[0]?.headers, {
+    "X-SignuDoc-Template": "completion_notification",
+  });
+  assert.equal(
+    Array.isArray(sent[0]?.attachments) && sent[0].attachments[0]?.filename,
+    "signed.pdf",
+  );
 });
 
-test("a batch turned away for rate is sent again too", async () => {
-  const { requests, service } = serviceAnswering([
-    RATE_LIMITED,
-    {
-      data: { data: [{ id: "email_1" }] } as unknown as { id: string },
-      error: null,
-      headers: {},
-    },
+test("a recipient the SMTP server refuses is reported as a failure", async () => {
+  const { service } = serviceWithTransport(() => ({
+    accepted: [],
+    rejected: ["signer@example.test"],
+  }));
+
+  await assert.rejects(service.send(MESSAGE), /refused signer@example\.test/);
+});
+
+test("an SMTP error is passed on", async () => {
+  const { service } = serviceWithTransport(() => {
+    throw new Error("535 Authentication failed");
+  });
+
+  await assert.rejects(service.send(MESSAGE), /535 Authentication failed/);
+});
+
+test("a batch is sent one message at a time", async () => {
+  const { sent, service } = serviceWithTransport((mail) => ({
+    accepted: [String(mail.to)],
+    messageId: `<${String(mail.to)}>`,
+    rejected: [],
+  }));
+
+  const results = await service.sendBatch([
+    MESSAGE,
+    { ...MESSAGE, to: "second@example.test" },
   ]);
 
-  const deliveries = await service.sendBatch([MESSAGE]);
+  assert.equal(sent.length, 2);
+  assert.deepEqual(
+    results.map((result) => result.messageId),
+    ["<signer@example.test>", "<second@example.test>"],
+  );
+});
 
-  assert.equal(deliveries[0]?.messageId, "email_1");
-  assert.equal(requests(), 2);
+test("SMTP is the default driver, and only smtp or capture are accepted", () => {
+  assert.equal(resolveEmailDriver({}), "smtp");
+  assert.equal(resolveEmailDriver({ EMAIL_DRIVER: "SMTP" }), "smtp");
+  assert.equal(resolveEmailDriver({ EMAIL_DRIVER: "capture" }), "capture");
+  assert.throws(
+    () => resolveEmailDriver({ EMAIL_DRIVER: "resend" }),
+    /Use "smtp" or "capture"/,
+  );
+});
+
+test("with no sender set, mail comes from the SMTP account or no-reply at the site's domain", () => {
+  assert.equal(
+    defaultSenderAddress({ SMTP_USER: "sign@acme.com" }),
+    "sign@acme.com",
+  );
+  assert.equal(
+    defaultSenderAddress({
+      APP_URL: "https://sign.acme.com",
+      SMTP_USER: "apikey",
+    }),
+    "no-reply@sign.acme.com",
+  );
 });
 
 test("a lazy email service is only built when it first sends, and only once", async () => {
@@ -165,13 +172,13 @@ test("a lazy email service is only built when it first sends, and only once", as
 test("a lazy email service with no provider fails the send, not its creation (issue #96)", async () => {
   const service = createLazyEmailService(() => createEmailService({ env: {} }));
 
-  await assert.rejects(service.send(MESSAGE), /RESEND_API_KEY/);
+  await assert.rejects(service.send(MESSAGE), /SMTP_HOST/);
 });
 
 test("signup knows when there is no email provider to send with (issue #95)", () => {
   assert.equal(canSendEmail({ NODE_ENV: "production" }), false);
   assert.equal(
-    canSendEmail({ NODE_ENV: "production", RESEND_API_KEY: "re_test" }),
+    canSendEmail({ NODE_ENV: "production", SMTP_HOST: "smtp.example.test" }),
     true,
   );
   assert.equal(
@@ -188,7 +195,7 @@ test("signup knows when there is no email provider to send with (issue #95)", ()
     true,
   );
   // The capture driver drops mail, so a real site cannot count on it, even
-  // when a Resend key is also present in the environment.
+  // when a mail server is also configured in the environment.
   assert.equal(
     canSendEmail({
       APP_URL: "https://sign.example.com",
@@ -202,7 +209,7 @@ test("signup knows when there is no email provider to send with (issue #95)", ()
       APP_URL: "https://sign.example.com",
       EMAIL_DRIVER: "capture",
       NODE_ENV: "production",
-      RESEND_API_KEY: "re_test",
+      SMTP_HOST: "smtp.example.test",
     }),
     false,
   );

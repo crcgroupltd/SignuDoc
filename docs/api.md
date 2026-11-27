@@ -54,7 +54,7 @@ What to know about keys:
   lists every administrator's keys. An app's keys made from its own
   administrator account, as above, do not depend on anyone staying.
 - **Keys skip two-step sign-in.** They are for servers, so keep them in your
-  app's secret settings (for example a Vercel environment variable), never
+  app's secret settings (for example an environment variable in your deployment), never
   in a browser or a mobile app, and revoke a key as soon as it may have
   leaked. The `sdk_` prefix makes a leaked key easy to search for. Secret
   scanners do not know it out of the box, but one that takes custom
@@ -103,8 +103,7 @@ On top of that, each key may create 60 envelopes in 10 minutes and send 100
 in an hour, counting creates and template calls that also send. A retry that
 gets its first answer again, through an `Idempotency-Key`, counts against
 neither. Your email
-provider's own limits usually bite first: Resend's free plan sends 100
-emails a day. An address that sends 30 bad keys in 10 minutes gets 429 for
+provider's own limits usually bite first. An address that sends 30 bad keys in 10 minutes gets 429 for
 any more bad keys until the 10 minutes are up. Good keys from it keep
 working.
 
@@ -183,7 +182,9 @@ Things to know:
 
 ### PDFs over 4 MB
 
-On Vercel a request to the app can carry at most 4.5 MB, so a bigger PDF (up
+This applies only to installs that keep files in Vercel Blob. A Docker
+install keeps files on its own disk, answers 404 here, and takes PDFs of up
+to 20 MB in the create request itself. With Blob storage, a bigger PDF (up
 to 20 MB) goes straight to storage first:
 
 ```sh
@@ -407,10 +408,8 @@ deliveries per endpoint, with your app's answer, and "Send again" puts a
 delivered or failed one back in line.
 
 Retries go out when something wakes the install: the next change to any
-envelope, the next API call, or the daily cron job. On Vercel's Hobby plan
-crons run once a day, so on a quiet install a retry can wait until the next
-day. On Pro you can run it more often by changing the schedule of
-`/api/internal/webhooks` in `vercel.json`, for example to `*/5 * * * *`.
+envelope, the next API call, or the app's own timer, every 5 minutes by
+default (`WEBHOOK_RETRY_MINUTES`).
 
 If your app was down, `GET /api/v1/webhook-deliveries?since=…` lists what
 it missed, with the same payloads. `since` counts from when each delivery

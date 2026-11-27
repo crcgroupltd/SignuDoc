@@ -1,6 +1,6 @@
 import { OrganizationSettings } from "@/components/settings/organization-settings";
 import { SettingsShell } from "@/components/settings/settings-shell";
-import { UpdatesPanel } from "@/components/settings/updates-panel";
+import { VersionPanel } from "@/components/settings/version-panel";
 import { isAdminUser } from "@/lib/auth/admin";
 import { accountClosureBlock } from "@/lib/account";
 import { getAuthSession } from "@/lib/auth/server";
@@ -12,7 +12,6 @@ import {
   resolveSettings,
 } from "@/lib/settings";
 import { userHasPassword, usesTwoFactor } from "@/lib/sign-in-security";
-import { getUpdateStatus } from "@/lib/software-update";
 
 export default async function SettingsPage() {
   const session = await getAuthSession();
@@ -49,7 +48,7 @@ export default async function SettingsPage() {
           )}
         />
       ) : null}
-      {isAdmin ? <UpdatesPanel initialStatus={getUpdateStatus(null)} /> : null}
+      {isAdmin ? <VersionPanel /> : null}
     </div>
   );
 }

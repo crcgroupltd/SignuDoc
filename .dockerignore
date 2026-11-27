@@ -1,0 +1,16 @@
+.git
+.github
+.next
+.data
+node_modules
+e2e
+test-results
+playwright-report
+docs
+*.tsbuildinfo
+.env
+.env.*
+Dockerfile
+docker-compose.yml
+compose.dev.yml
+.claude

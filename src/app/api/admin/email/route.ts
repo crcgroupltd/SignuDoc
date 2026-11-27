@@ -2,13 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { requireAdminSession } from "@/lib/auth/admin";
-import {
-  addEmailDomain,
-  getEmailStatus,
-  recheckEmailDomain,
-} from "@/lib/email-status";
+import { getEmailStatus } from "@/lib/email-status";
 import { sendTestEmail } from "@/lib/email-test";
-import { recordAdminActivity } from "@/lib/services/admin-activity";
 import { logRouteError } from "@/lib/security/logging";
 import {
   applyRateLimit,
@@ -20,7 +15,7 @@ import { getClientIpAddress, getRequestPathname } from "@/lib/security/request";
 // and the steps an administrator can take from the app when it does not.
 
 const actionSchema = z.object({
-  action: z.enum(["add_domain", "recheck", "send_test"]),
+  action: z.enum(["recheck", "send_test"]),
 });
 
 function failure(request: Request, error: unknown, userId: string) {
@@ -92,19 +87,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const status =
-      parsed.data.action === "add_domain"
-        ? await addEmailDomain({
-            // Only a domain Resend actually created is a change to record.
-            onDomainCreated: (domain) =>
-              recordAdminActivity({
-                event: "email_domain_changed",
-                metadata: { action: "added", domain },
-                request,
-                user: session.user,
-              }),
-          })
-        : await recheckEmailDomain();
+    // recheck: connect to the mail server again.
+    const status = await getEmailStatus();
 
     return NextResponse.json({ status });
   } catch (error) {

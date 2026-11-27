@@ -9,7 +9,7 @@ import type { ApiKeySummary } from "@/lib/api-keys";
 
 const GENERIC_ERROR_MESSAGE = "Something went wrong. Please try again.";
 const API_DOCS_URL =
-  "https://github.com/NYLLON-SOFTWARE/SignuDoc/blob/main/docs/api.md";
+  "https://github.com/crcgroupltd/SignuDoc/blob/main/docs/api.md";
 
 const dateFormatter = new Intl.DateTimeFormat("en-US", {
   day: "numeric",

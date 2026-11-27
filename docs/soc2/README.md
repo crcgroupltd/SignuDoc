@@ -32,7 +32,7 @@ Turn these on before an audit period starts. Each links to how.
 - [ ] Session limits set: for example 30 minutes without use and 12 hours at most (Settings, Organization, Sign-in security).
 - [ ] Sign-up limited to your own email domains, or closed (Settings, Organization).
 - [ ] A Vercel log drain to your SIEM, with alerts on `sign_in_locked`, `role_changed`, `two_factor_requirement_changed`, `settings_changed`, `backup_failure` and `retention_job_failure` ([self-hosting](../self-hosting.md#send-the-audit-trail-to-your-siem)).
-- [ ] The daily backup to a second Blob store in another Vercel team, and a test restore on the calendar ([Backup and restore](../backup-and-restore.md)).
+- [ ] The daily backup to a second Blob store in another Vercel team, and a test restore on the calendar ([Backup and restore](../self-hosting.md#backups)).
 - [ ] Retention rules that match your records policy (Settings, Organization).
 - [ ] The GitHub repository that deploys the install (your copy) with branch protection on the production branch, and updates taken through pull requests ([self-hosting](../self-hosting.md#keep-your-install-up-to-date)).
 - [ ] A support address that reaches a monitored mailbox (Settings, Organization).

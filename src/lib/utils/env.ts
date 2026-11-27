@@ -259,6 +259,40 @@ export function isHostedMode(env: EnvSource = process.env): boolean {
   return value === "1" || value === "true";
 }
 
+function readFlag(env: EnvSource, name: string): boolean | undefined {
+  const value = readEnv(env, name)?.toLowerCase();
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return value === "1" || value === "true" || value === "yes";
+}
+
+/**
+ * The mail server email is sent through. SMTP_PORT defaults to 587; port
+ * 465 means TLS from the start unless SMTP_SECURE says otherwise.
+ * SMTP_TLS_VERIFY=0 accepts a server certificate that does not check out,
+ * for a relay on a private network with its own certificate.
+ */
+export function resolveSmtpSettings(env: EnvSource = process.env) {
+  const parsedPort = Number.parseInt(readEnv(env, "SMTP_PORT") ?? "", 10);
+  const port =
+    Number.isInteger(parsedPort) && parsedPort > 0 && parsedPort < 65536
+      ? parsedPort
+      : 587;
+
+  return {
+    host: readEnv(env, "SMTP_HOST"),
+    password: readEnv(env, "SMTP_PASSWORD"),
+    port,
+    requireTls: readFlag(env, "SMTP_REQUIRE_TLS") ?? false,
+    secure: readFlag(env, "SMTP_SECURE") ?? port === 465,
+    user: readEnv(env, "SMTP_USER"),
+    verifyTls: readFlag(env, "SMTP_TLS_VERIFY") ?? true,
+  };
+}
+
 // Every value is optional here. Code that needs one checks it at the point of
 // use (see requireConfigValue), so a missing email setting cannot stop a page
 // that never sends email from rendering.
@@ -271,8 +305,8 @@ export function getEnv(env: EnvSource = process.env) {
       betterAuthUrl: resolveAuthUrl(env),
     },
     email: {
-      apiKey: readEnv(env, "RESEND_API_KEY"),
-      senderAddress: readEnv(env, "RESEND_FROM_EMAIL"),
+      senderAddress: readEnv(env, "SMTP_FROM"),
+      smtp: resolveSmtpSettings(env),
       supportAddress: readEnv(env, "SUPPORT_EMAIL"),
     },
     internal: {

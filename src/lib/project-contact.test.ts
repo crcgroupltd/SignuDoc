@@ -92,7 +92,7 @@ test("security reports go through GitHub, not to an email address", () => {
 
   assert.ok(
     readFileSync(path.join(repoRoot, "SECURITY.md"), "utf8").includes(
-      "https://github.com/NYLLON-SOFTWARE/SignuDoc/security/advisories/new",
+      "https://github.com/crcgroupltd/SignuDoc/security/advisories/new",
     ),
   );
 });

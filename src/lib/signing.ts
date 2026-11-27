@@ -1313,7 +1313,7 @@ async function sendCompletionEmails(input: {
     ...signerMessages,
   ];
 
-  // One by one: Resend's batch endpoint does not take attachments. Each
+  // One by one: a batch does not take attachments. Each
   // message is tried even if another fails, so one bad address does not cost
   // everyone else their copy.
   const failures: unknown[] = [];

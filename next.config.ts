@@ -11,6 +11,9 @@ const { version } = JSON.parse(readFileSync("./package.json", "utf8")) as {
 };
 
 const nextConfig: NextConfig = {
+  // A self-contained server in .next/standalone, which the Docker image runs
+  // (see Dockerfile).
+  output: "standalone",
   env: {
     NEXT_PUBLIC_SIGNUDOC_VERSION: version,
     // Whether Vercel BotID is on, decided once at build time so the browser

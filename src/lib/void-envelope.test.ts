@@ -450,11 +450,11 @@ async function withEmailEnv<T>(
   env: {
     EMAIL_CAPTURE_DIR?: string;
     EMAIL_DRIVER?: string;
-    RESEND_API_KEY?: string;
+    SMTP_HOST?: string;
   },
   run: () => Promise<T>,
 ): Promise<T> {
-  const keys = ["EMAIL_CAPTURE_DIR", "EMAIL_DRIVER", "RESEND_API_KEY"] as const;
+  const keys = ["EMAIL_CAPTURE_DIR", "EMAIL_DRIVER", "SMTP_HOST"] as const;
   const previous = new Map<string, string | undefined>(
     keys.map((key) => [key, process.env[key]]),
   );

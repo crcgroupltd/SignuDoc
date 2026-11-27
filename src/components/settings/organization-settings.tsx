@@ -33,7 +33,7 @@ import {
   CUSTOM_DISCLOSURE_NOTICE,
   tidyDisclosureText,
 } from "@/lib/consent-disclosure-notice";
-import type { EmailDnsRecord, EmailStatus } from "@/lib/email-status";
+import type { EmailStatus } from "@/lib/email-status";
 import type {
   OrganizationSettingsField,
   OrganizationSettingsView,
@@ -44,8 +44,6 @@ import type { SignupMode } from "@/lib/signup-policy";
 // sign up, where email comes from, and whether email works yet.
 
 const GENERIC_ERROR_MESSAGE = "Something went wrong. Please try again.";
-const RESEND_DOMAINS_URL = "https://resend.com/domains";
-const RESEND_MARKETPLACE_URL = "https://vercel.com/marketplace/resend";
 
 type OrganizationSettingsProps = {
   initialSettings: OrganizationSettingsView;
@@ -70,7 +68,7 @@ type EmailResponse = {
   test?: { sent: true; to: string } | { sent: false; message: string };
 } | null;
 
-type EmailAction = "add_domain" | "recheck" | "send_test";
+type EmailAction = "recheck" | "send_test";
 
 const signupModeOptions: Array<{
   description: string;
@@ -349,8 +347,8 @@ export function OrganizationSettings({
                 error={errors.senderAddress}
                 helper={
                   values.senderAddressFromEnv
-                    ? "Set by the RESEND_FROM_EMAIL environment variable."
-                    : "The address emails come from, at a domain you own. A subdomain such as notifications@sign.yourcompany.com keeps this site's mail apart from your everyday email."
+                    ? "Set by the SMTP_FROM environment variable."
+                    : "The address emails come from. Your mail server must be allowed to send from it."
                 }
                 label="Send email from"
                 name="sender-address"
@@ -707,10 +705,9 @@ function EmailSetupPanel() {
 
   const summary = status ? describeEmailStatus(status) : null;
   const canSendTest =
-    status !== null &&
-    status.state !== "missing_key" &&
-    status.state !== "capture" &&
-    status.state !== "capture_refused";
+    status?.state === "untested" ||
+    status?.state === "ready" ||
+    status?.state === "error";
 
   return (
     <div className="space-y-5 border-t border-(--border) pt-8" id="email-setup">
@@ -744,70 +741,33 @@ function EmailSetupPanel() {
           {summary.steps ? (
             <ol className="list-decimal space-y-2 pl-5 text-sm leading-6 text-(--secondary) marker:font-semibold marker:text-(--fg)">
               {summary.steps.map((step) => (
-                <li key={step.text}>
-                  {step.text}
-                  {step.link ? (
-                    <>
-                      {" "}
-                      <a
-                        className="font-semibold text-(--accent-ink) underline underline-offset-4"
-                        href={step.link.href}
-                        rel="noreferrer"
-                        target="_blank"
-                      >
-                        {step.link.label}
-                      </a>
-                    </>
-                  ) : null}
-                </li>
+                <li key={step}>{step}</li>
               ))}
             </ol>
           ) : null}
         </div>
       )}
 
-      {status?.state === "domain_pending" ? (
-        <DnsRecordsTable domain={status.domain} records={status.records} />
-      ) : null}
-
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-        {status?.state === "domain_missing" ? (
-          <ShellButton
-            disabled={pendingAction !== null}
-            loading={pendingAction === "add_domain"}
-            onClick={() => void runAction("add_domain")}
-          >
-            {pendingAction === "add_domain"
-              ? "Adding..."
-              : `Set up ${status.domain}`}
-          </ShellButton>
-        ) : null}
-        {status?.state === "domain_pending" ? (
-          <ShellButton
-            disabled={pendingAction !== null}
-            loading={pendingAction === "recheck"}
-            onClick={() => void runAction("recheck")}
-          >
-            {pendingAction === "recheck" ? "Checking..." : "Check DNS records"}
-          </ShellButton>
-        ) : null}
         {canSendTest ? (
           <ShellButton
             disabled={pendingAction !== null}
             loading={pendingAction === "send_test"}
             onClick={() => void runAction("send_test")}
-            variant="secondary"
           >
             {pendingAction === "send_test"
               ? "Sending..."
               : "Send me a test email"}
           </ShellButton>
         ) : null}
-        {status?.state === "restricted_key" ||
-        status?.state === "error" ||
-        status?.state === "test_sender" ? (
-          <ShellButton href={RESEND_DOMAINS_URL} variant="ghost">
-            Open Resend
+        {status && status.state !== "capture" ? (
+          <ShellButton
+            disabled={pendingAction !== null}
+            loading={pendingAction === "recheck"}
+            onClick={() => void runAction("recheck")}
+            variant="secondary"
+          >
+            {pendingAction === "recheck" ? "Checking..." : "Check again"}
           </ShellButton>
         ) : null}
       </div>
@@ -826,15 +786,15 @@ function EmailSetupPanel() {
   );
 }
 
-type EmailStep = {
-  link?: { href: string; label: string };
-  text: string;
-};
+const SMTP_SETUP_STEPS = [
+  "Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD and SMTP_FROM for the app in docker-compose.yml, using your mail server's settings.",
+  "Recreate the app container (docker compose up -d), then reload this page.",
+];
 
 function describeEmailStatus(status: EmailStatus): {
   lines: string[];
   ready: boolean;
-  steps?: EmailStep[];
+  steps?: string[];
   title: string;
 } {
   switch (status.state) {
@@ -847,139 +807,39 @@ function describeEmailStatus(status: EmailStatus): {
         title: "Emails are being captured, not sent",
       };
     case "capture_refused":
-      return status.onVercel
-        ? {
-            lines: [
-              "EMAIL_DRIVER=capture drops every email and cannot be used in production, so this site refuses to send anything: no sign-up confirmations and no signing invitations.",
-            ],
-            ready: false,
-            steps: [
-              {
-                text: "In this project on Vercel, open Settings, then Environment Variables, and remove EMAIL_DRIVER (or set it to resend).",
-              },
-              {
-                link: {
-                  href: RESEND_MARKETPLACE_URL,
-                  label: "Resend on the Vercel Marketplace",
-                },
-                text: "Connect Resend and check that RESEND_API_KEY is listed for Production.",
-              },
-              {
-                text: "Open Deployments, open the ••• menu on the latest Production deployment and choose Redeploy, then reload this page.",
-              },
-            ],
-            title: "Email cannot be sent with EMAIL_DRIVER=capture",
-          }
-        : {
-            lines: [
-              "EMAIL_DRIVER=capture drops every email and cannot be used in production, so this site refuses to send anything: no sign-up confirmations and no signing invitations.",
-            ],
-            ready: false,
-            steps: [
-              {
-                text: "Remove EMAIL_DRIVER=capture from the environment variables where this site runs (or set EMAIL_DRIVER=resend).",
-              },
-              {
-                link: {
-                  href: "https://resend.com/api-keys",
-                  label: "Resend API keys",
-                },
-                text: "Configure a delivery provider by setting RESEND_API_KEY if it is not set already.",
-              },
-              { text: "Restart the app, then reload this page." },
-            ],
-            title: "Email cannot be sent with EMAIL_DRIVER=capture",
-          };
-    case "missing_key":
-      return status.onVercel
-        ? {
-            lines: [
-              "This site has no Resend API key, so it cannot send anything: no sign-up confirmations and no signing invitations.",
-            ],
-            ready: false,
-            steps: [
-              {
-                link: {
-                  href: RESEND_MARKETPLACE_URL,
-                  label: "Resend on the Vercel Marketplace",
-                },
-                text: "Open Resend on the Vercel Marketplace. Choose Install (or Connect Project if your team already has Resend) and connect it to this project.",
-              },
-              {
-                text: "In this project on Vercel, open Settings, then Environment Variables, and check that RESEND_API_KEY is listed for Production.",
-              },
-              {
-                text: "Open Deployments, open the ••• menu on the latest Production deployment and choose Redeploy. Environment variables only reach deployments made after they were added, so a site deployed before Resend was connected still has no key until it is redeployed.",
-              },
-              {
-                text: "When the new deployment is ready, reload this page.",
-              },
-            ],
-            title: "Email is not connected",
-          }
-        : {
-            lines: [
-              "This site has no Resend API key, so it cannot send anything: no sign-up confirmations and no signing invitations.",
-            ],
-            ready: false,
-            steps: [
-              {
-                link: {
-                  href: "https://resend.com/api-keys",
-                  label: "Resend API keys",
-                },
-                text: "Create an API key in Resend with full access, so this page can add your domain and check its DNS records.",
-              },
-              {
-                text: "Set it as the RESEND_API_KEY environment variable where this site runs.",
-              },
-              { text: "Restart the app, then reload this page." },
-            ],
-            title: "Email is not connected",
-          };
-    case "test_sender":
       return {
         lines: [
-          `Emails are going out from Resend's shared test address (${status.senderAddress}). Resend only delivers those to the owner of the Resend account, so signers and new users will not receive anything yet.`,
-          'Enter an address at your own domain in "Send email from" above and save. The DNS records to add will appear here.',
+          "EMAIL_DRIVER=capture drops every email and cannot be used in production, so this site refuses to send anything: no sign-up confirmations and no signing invitations.",
         ],
         ready: false,
-        title: "Email only reaches you so far",
+        steps: [
+          "Remove EMAIL_DRIVER=capture from the app's environment (or set EMAIL_DRIVER=smtp).",
+          ...SMTP_SETUP_STEPS,
+        ],
+        title: "Email cannot be sent with EMAIL_DRIVER=capture",
       };
-    case "domain_missing":
+    case "missing_config":
       return {
         lines: [
-          `${status.domain} has not been added to your Resend account yet. Set it up here to get the DNS records that prove you own it.`,
+          "This site has no mail server set, so it cannot send anything: no sign-up confirmations and no signing invitations.",
         ],
         ready: false,
-        title: `${status.domain} needs to be set up`,
+        steps: SMTP_SETUP_STEPS,
+        title: "Email is not connected",
       };
-    case "domain_pending":
+    case "untested":
       return {
         lines: [
-          `Add these records where ${status.domain}'s DNS is managed, then check them. DNS changes can take a few minutes to be seen, and sometimes longer.`,
-          ...(status.mayAlreadySend
-            ? [
-                "Resend has verified part of this domain, so sending may already work. Send yourself a test email to find out. If it arrives, email is working.",
-              ]
-            : []),
+          `The mail server at ${status.server} answers and accepts this site's sign-in. Emails will come from ${status.senderAddress}.`,
+          "Send yourself a test email. If it arrives, email is working.",
         ],
         ready: false,
-        title: `Waiting for ${status.domain}'s DNS records`,
-      };
-    case "restricted_key":
-      return {
-        lines: [
-          `This site's Resend key is only allowed to send email, so it cannot check ${status.domain} from here. Open Resend to add the domain and see its DNS records.`,
-          "When that is done, send yourself a test email. If it arrives, email is working.",
-        ],
-        ready: false,
-        title: "Finish the domain in Resend",
+        title: "Send a test email to finish",
       };
     case "ready":
       return {
         lines: [
-          `Emails are sent from ${status.senderAddress}, and ${status.domain} is verified.`,
+          `Emails are sent from ${status.senderAddress} through ${status.server}.`,
         ],
         ready: true,
         title: "Email is working",
@@ -987,76 +847,11 @@ function describeEmailStatus(status: EmailStatus): {
     case "error":
       return {
         lines: [
-          `Resend could not be asked about this site's email: ${status.message}`,
+          `The mail server at ${status.server} could not be used: ${status.message}`,
+          "Check SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER and SMTP_PASSWORD, and that this server can reach the mail server on that port.",
         ],
         ready: false,
         title: "Email could not be checked",
       };
   }
-}
-
-function DnsRecordsTable({
-  domain,
-  records,
-}: {
-  domain: string;
-  records: readonly EmailDnsRecord[];
-}) {
-  if (records.length === 0) {
-    return (
-      <p className="text-sm leading-6 text-(--secondary)">
-        Resend did not list any records for {domain}. Open Resend to see them.
-      </p>
-    );
-  }
-
-  return (
-    <div className="overflow-x-auto rounded-2xl border border-(--border)">
-      <table className="w-full min-w-[640px] border-collapse text-left text-sm">
-        <caption className="sr-only">DNS records to add for {domain}</caption>
-        <thead>
-          <tr className="border-b border-(--border) bg-(--surface) text-xs text-(--tertiary)">
-            <th className="px-4 py-3 font-semibold" scope="col">
-              Type
-            </th>
-            <th className="px-4 py-3 font-semibold" scope="col">
-              Name
-            </th>
-            <th className="px-4 py-3 font-semibold" scope="col">
-              Value
-            </th>
-            <th className="px-4 py-3 font-semibold" scope="col">
-              Status
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {records.map((record) => (
-            <tr
-              className="border-b border-(--border) align-top last:border-b-0"
-              key={`${record.type}-${record.name}-${record.value}`}
-            >
-              <td className="px-4 py-3 font-semibold text-(--fg)">
-                {record.type}
-                {record.priority !== null ? (
-                  <span className="block text-xs font-normal text-(--tertiary)">
-                    Priority {record.priority}
-                  </span>
-                ) : null}
-              </td>
-              <td className="px-4 py-3 font-mono text-[0.8rem] break-all text-(--fg)">
-                {record.name}
-              </td>
-              <td className="px-4 py-3 font-mono text-[0.8rem] break-all text-(--fg)">
-                {record.value}
-              </td>
-              <td className="px-4 py-3 text-(--secondary)">
-                {record.status === "verified" ? "Found" : "Not found yet"}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
 }

@@ -93,7 +93,6 @@ export default async function SetupPage() {
         knownSupportAddress={
           process.env.SUPPORT_EMAIL?.trim() || storedSupportAddress
         }
-        resendDomain={process.env.RESEND_EMAIL_DOMAIN?.trim() || null}
         siteHost={readSiteHost()}
         view={view}
       />

@@ -80,7 +80,7 @@ const form = {
 };
 
 test("a sender fixed by the environment, display name and all, does not block saving the rest", async () => {
-  const env = { RESEND_FROM_EMAIL: "Acme Signing <sign@acme.com>" };
+  const env = { SMTP_FROM: "Acme Signing <sign@acme.com>" };
   const current = resolveSettings(stored, env);
   const { database, saved } = fakeDatabase();
   const result = await updateOrganizationSettings(

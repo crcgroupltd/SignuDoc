@@ -253,10 +253,10 @@ test("voiding with no email provider is refused as a setup state and leaves the 
     currentSigner.id,
   ]);
   const driverBefore = process.env.EMAIL_DRIVER;
-  const keyBefore = process.env.RESEND_API_KEY;
+  const keyBefore = process.env.SMTP_HOST;
 
   delete process.env.EMAIL_DRIVER;
-  delete process.env.RESEND_API_KEY;
+  delete process.env.SMTP_HOST;
 
   try {
     await assert.rejects(
@@ -282,9 +282,9 @@ test("voiding with no email provider is refused as a setup state and leaves the 
     }
 
     if (keyBefore === undefined) {
-      delete process.env.RESEND_API_KEY;
+      delete process.env.SMTP_HOST;
     } else {
-      process.env.RESEND_API_KEY = keyBefore;
+      process.env.SMTP_HOST = keyBefore;
     }
   }
 

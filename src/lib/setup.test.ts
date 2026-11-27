@@ -37,7 +37,7 @@ test("a fresh install with SETUP_TOKEN asks for it", () => {
       { status: "fresh" },
       {
         env: {
-          RESEND_FROM_EMAIL: "sign@acme.com",
+          SMTP_FROM: "sign@acme.com",
           SETUP_TOKEN: "a-secret-of-the-owner",
         },
       },

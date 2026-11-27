@@ -166,14 +166,14 @@ If your agreements run through Salesforce, need SMS checks or ID document checks
 
 ### Run it with Docker
 
-You need Docker with Compose, a domain name, a reverse proxy that serves HTTPS (nginx, Traefik, Caddy or similar), and a [Resend](https://resend.com) account for email.
+You need Docker with Compose, a domain name, a reverse proxy that serves HTTPS (nginx, Traefik, Caddy or similar), and an SMTP server or relay that can send email from your domain.
 
 1. **Get the code:** `git clone https://github.com/NYLLON-SOFTWARE/SignuDoc.git && cd SignuDoc`
-2. **Fill in `docker-compose.yml`.** Replace every `CHANGE_ME` (database password, `BETTER_AUTH_SECRET`, `SETUP_TOKEN`, `RESEND_API_KEY`) and set `APP_URL` to your public address. There is no `.env` file: every setting is in the compose file.
+2. **Fill in `docker-compose.yml`.** Replace every `CHANGE_ME` (database password, `BETTER_AUTH_SECRET`, `SETUP_TOKEN`, your SMTP server's login) and set `APP_URL`, `SMTP_HOST` and `SMTP_FROM`. There is no `.env` file: every setting is in the compose file.
 3. **Start it:** `docker login ghcr.io` (once, if the image is private), then `docker compose pull && docker compose up -d`. Two containers start, `app` and `db`, and the app applies the database schema by itself. The image comes from GitHub Container Registry, where `.github/workflows/docker-image.yml` publishes it on every push to `main`; `docker compose up -d --build` builds it from your checkout instead.
 4. **Point your reverse proxy at port 3000.** See [Reverse proxy](docs/self-hosting.md#reverse-proxy) for the headers and upload size it needs.
 5. **Open your site at `/setup`.** Give the setup token, name your organization, give the email address people should write to for help, and create the first account, which is the administrator.
-6. **Set up the address you send from.** Under Settings, Organization, enter an address at your own domain. The site lists the DNS records to add and checks them for you.
+6. **Check email.** Under Settings, Organization, the email panel connects to your SMTP server. Send yourself a test email to finish.
 
 **Taking new versions:** `docker compose pull && docker compose up -d`. New database migrations apply when the app starts. The [self-hosting guide](docs/self-hosting.md) covers backups, sign-in security, the seal and every optional setting.
 

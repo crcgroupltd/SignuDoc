@@ -805,10 +805,10 @@ test("a reminder with no email provider is refused before the signer's link is r
     [signerId],
   );
   const driverBefore = process.env.EMAIL_DRIVER;
-  const keyBefore = process.env.RESEND_API_KEY;
+  const keyBefore = process.env.SMTP_HOST;
 
   delete process.env.EMAIL_DRIVER;
-  delete process.env.RESEND_API_KEY;
+  delete process.env.SMTP_HOST;
 
   try {
     await assert.rejects(
@@ -828,7 +828,7 @@ test("a reminder with no email provider is refused before the signer's link is r
   } finally {
     for (const [name, value] of [
       ["EMAIL_DRIVER", driverBefore],
-      ["RESEND_API_KEY", keyBefore],
+      ["SMTP_HOST", keyBefore],
     ] as const) {
       if (value === undefined) {
         delete process.env[name];
@@ -855,13 +855,13 @@ async function withoutEmailProvider<T>(
   run: () => Promise<T>,
   extra: Record<string, string> = {},
 ) {
-  const names = ["EMAIL_DRIVER", "RESEND_API_KEY", ...Object.keys(extra)];
+  const names = ["EMAIL_DRIVER", "SMTP_HOST", ...Object.keys(extra)];
   const settingsBefore = names.map(
     (name) => [name, process.env[name]] as const,
   );
 
   delete process.env.EMAIL_DRIVER;
-  delete process.env.RESEND_API_KEY;
+  delete process.env.SMTP_HOST;
   Object.assign(process.env, extra);
 
   try {

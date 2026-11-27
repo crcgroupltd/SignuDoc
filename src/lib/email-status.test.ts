@@ -1,14 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import {
-  addEmailDomain,
-  emailNeedsAttention,
-  getEmailStatus,
-  recheckEmailDomain,
-  resendRegionOption,
-  type ResendDomainsClient,
-} from "./email-status.ts";
+import { emailNeedsAttention, getEmailStatus } from "./email-status.ts";
+import type { MailTransport } from "./services/email.ts";
 import { resolveSettings, type AppSettings } from "./settings.ts";
 
 const stored: AppSettings = {
@@ -31,620 +25,111 @@ const stored: AppSettings = {
   termsUrl: null,
 };
 
-const env = { RESEND_API_KEY: "re_test_key" };
+const env = {
+  NODE_ENV: "production",
+  SMTP_HOST: "smtp.acme.com",
+  SMTP_PORT: "587",
+};
 const settings = resolveSettings(stored, env);
 
-const DKIM_RECORD = {
-  name: "resend._domainkey",
-  record: "DKIM",
-  status: "pending",
-  ttl: "Auto",
-  type: "TXT",
-  value: "p=MIGfMA0GCSqGSIb3DQEB",
-};
-const SPF_MX_RECORD = {
-  name: "send",
-  priority: 10,
-  record: "SPF",
-  status: "pending",
-  ttl: "Auto",
-  type: "MX",
-  value: "feedback-smtp.us-east-1.amazonses.com",
-};
-// Resend lists records for features this app does not use without a name
-// or a value.
-const TRACKING_RECORD = { record: "Tracking", status: "not_started" };
-
-type FakeError = { message: string; name: string; statusCode: number };
-type FakeDomain = {
-  id: string;
-  name: string;
-  records: unknown[];
-  status: string;
-};
-
-/** Stands in for Resend's domains API and remembers what was asked of it. */
-function fakeResend(
-  initial: {
-    domains?: FakeDomain[];
-    errors?: Record<string, FakeError[]>;
-  } = {},
-) {
-  const domains = [...(initial.domains ?? [])];
-  const errors = initial.errors ?? {};
-  const calls: string[] = [];
-  const readyMarks: boolean[] = [];
-
-  function respond<T>(method: string, data: () => T) {
-    const error = errors[method]?.shift();
-
-    return Promise.resolve(
-      error ? { data: null, error } : { data: data(), error: null },
-    );
-  }
-
-  const client = {
-    create({ name }: { name: string }) {
-      calls.push(`create ${name}`);
-
-      return respond("create", () => {
-        const created = {
-          id: `domain_${String(domains.length + 1)}`,
-          name,
-          records: [DKIM_RECORD, SPF_MX_RECORD, TRACKING_RECORD],
-          status: "not_started",
-        };
-
-        domains.push(created);
-
-        return created;
-      });
-    },
-    get(id: string) {
-      calls.push(`get ${id}`);
-
-      return respond("get", () => domains.find((domain) => domain.id === id));
-    },
-    // Pages like Resend does: up to "limit" domains after the "after" id.
-    list({ after, limit = 20 }: { after?: string; limit?: number } = {}) {
-      calls.push(after ? `list after ${after}` : "list");
-
-      return respond("list", () => {
-        const start = after
-          ? domains.findIndex((domain) => domain.id === after) + 1
-          : 0;
-        const page = domains.slice(start, start + limit);
-
-        return {
-          data: page.map(({ id, name, status }) => ({ id, name, status })),
-          has_more: start + limit < domains.length,
-        };
-      });
-    },
-    verify(id: string) {
-      calls.push(`verify ${id}`);
-
-      return respond("verify", () => ({ id }));
-    },
-  };
-
+function transport(verify: () => Promise<unknown>): MailTransport {
   return {
-    calls,
-    domains,
-    options: {
-      domainsClient: client as unknown as ResendDomainsClient,
-      env,
-      recordReady: async (ready: boolean) => {
-        readyMarks.push(ready);
-      },
-      settings,
+    async sendMail() {
+      return { accepted: [], rejected: [] };
     },
-    readyMarks,
+    verify,
   };
 }
 
-test("the capture driver is reported as capture only where it is allowed (issue #212)", async () => {
-  // Development and loopback production builds are allowed to capture mail.
-  assert.deepEqual(await getEmailStatus({ env: { EMAIL_DRIVER: "capture" } }), {
-    state: "capture",
-  });
+test("with no SMTP_HOST, email is not connected", async () => {
+  assert.deepEqual(
+    await getEmailStatus({ env: { NODE_ENV: "production" }, settings }),
+    { state: "missing_config" },
+  );
+});
+
+test("a server that answers, before any test email, waits for one", async () => {
   assert.deepEqual(
     await getEmailStatus({
-      env: { EMAIL_DRIVER: "capture", NODE_ENV: "development" },
-    }),
-    { state: "capture" },
-  );
-  assert.deepEqual(
-    await getEmailStatus({
-      env: {
-        APP_URL: "http://localhost:3207",
-        EMAIL_DRIVER: "capture",
-        NODE_ENV: "production",
-      },
-    }),
-    { state: "capture" },
-  );
-  assert.deepEqual(
-    await getEmailStatus({
-      env: {
-        APP_URL: "http://127.0.0.1:3207",
-        EMAIL_DRIVER: "capture",
-        NODE_ENV: "production",
-      },
-    }),
-    { state: "capture" },
-  );
-
-  // Deployed production installs refuse capture, even if RESEND_API_KEY is set.
-  const deployedProductionEnv = {
-    APP_URL: "https://sign.example.com",
-    EMAIL_DRIVER: "capture",
-    NODE_ENV: "production",
-  };
-
-  assert.deepEqual(await getEmailStatus({ env: deployedProductionEnv }), {
-    onVercel: false,
-    state: "capture_refused",
-  });
-  assert.deepEqual(
-    await getEmailStatus({
-      env: { ...deployedProductionEnv, RESEND_API_KEY: "re_test_key" },
+      env,
+      settings,
+      transport: transport(async () => true),
     }),
     {
-      onVercel: false,
-      state: "capture_refused",
-    },
-  );
-  assert.deepEqual(
-    await getEmailStatus({
-      env: { EMAIL_DRIVER: "capture", NODE_ENV: "production" },
-    }),
-    {
-      onVercel: false,
-      state: "capture_refused",
-    },
-  );
-  assert.deepEqual(await addEmailDomain({ env: deployedProductionEnv }), {
-    onVercel: false,
-    state: "capture_refused",
-  });
-  assert.deepEqual(await recheckEmailDomain({ env: deployedProductionEnv }), {
-    onVercel: false,
-    state: "capture_refused",
-  });
-
-  // Vercel always refuses capture, regardless of NODE_ENV or APP_URL.
-  assert.deepEqual(
-    await getEmailStatus({ env: { EMAIL_DRIVER: "capture", VERCEL: "1" } }),
-    {
-      onVercel: true,
-      state: "capture_refused",
-    },
-  );
-  assert.deepEqual(
-    await getEmailStatus({
-      env: {
-        EMAIL_DRIVER: "capture",
-        NODE_ENV: "production",
-        VERCEL: "1",
-        VERCEL_ENV: "production",
-        VERCEL_PROJECT_PRODUCTION_URL: "sign.example.com",
-      },
-    }),
-    {
-      onVercel: true,
-      state: "capture_refused",
-    },
-  );
-  assert.deepEqual(
-    await getEmailStatus({
-      env: {
-        APP_URL: "http://localhost:3207",
-        EMAIL_DRIVER: "capture",
-        NODE_ENV: "production",
-        VERCEL: "1",
-      },
-    }),
-    {
-      onVercel: true,
-      state: "capture_refused",
-    },
-  );
-});
-
-test("no Resend key means email is not connected", async () => {
-  assert.deepEqual(await getEmailStatus({ env: {}, settings }), {
-    onVercel: false,
-    state: "missing_key",
-  });
-  assert.deepEqual(await getEmailStatus({ env: { VERCEL: "1" }, settings }), {
-    onVercel: true,
-    state: "missing_key",
-  });
-});
-
-test("Resend's test address is reported without asking Resend about domains", async () => {
-  const resend = fakeResend();
-  const status = await getEmailStatus({
-    ...resend.options,
-    settings: resolveSettings({ ...stored, senderAddress: null }, env),
-  });
-
-  assert.deepEqual(status, {
-    senderAddress: "onboarding@resend.dev",
-    state: "test_sender",
-  });
-  assert.deepEqual(resend.calls, []);
-  assert.deepEqual(resend.readyMarks, [false]);
-});
-
-test("a sender address in the environment is the one that is checked", async () => {
-  const resend = fakeResend();
-  const status = await getEmailStatus({
-    ...resend.options,
-    settings: resolveSettings(stored, {
-      ...env,
-      RESEND_FROM_EMAIL: "Acme <Sign@Mail.Acme.com>",
-    }),
-  });
-
-  assert.deepEqual(status, {
-    domain: "mail.acme.com",
-    senderAddress: "sign@mail.acme.com",
-    state: "domain_missing",
-  });
-});
-
-test("a domain Resend has not heard of needs setting up", async () => {
-  const resend = fakeResend();
-
-  assert.deepEqual(await getEmailStatus(resend.options), {
-    domain: "acme.com",
-    senderAddress: "sign@acme.com",
-    state: "domain_missing",
-  });
-  assert.deepEqual(resend.calls, ["list"]);
-  assert.deepEqual(resend.readyMarks, [false]);
-});
-
-test("setting the domain up adds it to Resend and returns the DNS records to add", async () => {
-  const resend = fakeResend();
-  const status = await addEmailDomain(resend.options);
-
-  assert.deepEqual(status, {
-    domain: "acme.com",
-    records: [
-      {
-        name: "resend._domainkey",
-        priority: null,
-        purpose: "DKIM",
-        status: "pending",
-        type: "TXT",
-        value: "p=MIGfMA0GCSqGSIb3DQEB",
-      },
-      {
-        name: "send",
-        priority: 10,
-        purpose: "SPF",
-        status: "pending",
-        type: "MX",
-        value: "feedback-smtp.us-east-1.amazonses.com",
-      },
-    ],
-    senderAddress: "sign@acme.com",
-    state: "domain_pending",
-  });
-  assert.deepEqual(resend.calls, ["list", "create acme.com"]);
-});
-
-test("setting up a domain that is already there shows its records instead of adding it twice", async () => {
-  const resend = fakeResend({
-    domains: [
-      {
-        id: "domain_1",
-        name: "Acme.com",
-        records: [DKIM_RECORD],
-        status: "pending",
-      },
-    ],
-  });
-  const status = await addEmailDomain(resend.options);
-
-  assert.equal(status.state, "domain_pending");
-  assert.deepEqual(resend.calls, ["list", "get domain_1"]);
-});
-
-test("a domain whose records are not verified yet is pending, with its records", async () => {
-  const resend = fakeResend({
-    domains: [
-      {
-        id: "domain_1",
-        name: "acme.com",
-        records: [DKIM_RECORD],
-        status: "pending",
-      },
-    ],
-  });
-  const status = await getEmailStatus(resend.options);
-
-  assert.equal(status.state, "domain_pending");
-  assert.equal(
-    status.state === "domain_pending" ? status.records.length : 0,
-    1,
-  );
-  // Nothing is verified, so there is no reason to think it can send.
-  assert.equal("mayAlreadySend" in status, false);
-  assert.deepEqual(resend.calls, ["list", "get domain_1"]);
-  assert.deepEqual(resend.readyMarks, [false]);
-});
-
-test("a verified domain means email is working, and that is recorded", async () => {
-  const resend = fakeResend({
-    domains: [
-      { id: "domain_1", name: "acme.com", records: [], status: "verified" },
-    ],
-  });
-
-  assert.deepEqual(await getEmailStatus(resend.options), {
-    domain: "acme.com",
-    senderAddress: "sign@acme.com",
-    state: "ready",
-  });
-  assert.deepEqual(resend.calls, ["list"]);
-  assert.deepEqual(resend.readyMarks, [true]);
-});
-
-test("checking again asks Resend to verify, then reads the result", async () => {
-  const resend = fakeResend({
-    domains: [
-      {
-        id: "domain_1",
-        name: "acme.com",
-        records: [DKIM_RECORD],
-        status: "pending",
-      },
-    ],
-  });
-
-  // The DNS records were found between the two requests.
-  const pending = await recheckEmailDomain(resend.options);
-
-  assert.equal(pending.state, "domain_pending");
-  assert.deepEqual(resend.calls, ["list", "verify domain_1", "get domain_1"]);
-
-  resend.domains[0]!.status = "verified";
-
-  assert.equal((await recheckEmailDomain(resend.options)).state, "ready");
-});
-
-test("a check that Resend refuses to start is reported, not passed off as still waiting", async () => {
-  const resend = fakeResend({
-    domains: [
-      {
-        id: "domain_1",
-        name: "acme.com",
-        records: [DKIM_RECORD],
-        status: "pending",
-      },
-    ],
-    errors: {
-      verify: [
-        {
-          message: "Something went wrong on Resend's side.",
-          name: "internal_server_error",
-          statusCode: 500,
-        },
-      ],
-    },
-  });
-
-  assert.deepEqual(await recheckEmailDomain(resend.options), {
-    message: "Something went wrong on Resend's side.",
-    senderAddress: "sign@acme.com",
-    state: "error",
-  });
-  // The domain was not read again, and nothing was recorded either way.
-  assert.deepEqual(resend.calls, ["list", "verify domain_1"]);
-  assert.deepEqual(resend.readyMarks, []);
-});
-
-test("a domain beyond the first page of a large Resend account is still found", async () => {
-  const others = Array.from({ length: 230 }, (_, index) => ({
-    id: `other_${String(index)}`,
-    name: `client-${String(index)}.example`,
-    records: [],
-    status: "verified",
-  }));
-  const resend = fakeResend({
-    domains: [
-      ...others,
-      { id: "domain_acme", name: "acme.com", records: [], status: "verified" },
-    ],
-  });
-
-  assert.equal((await getEmailStatus(resend.options)).state, "ready");
-  assert.deepEqual(resend.calls, [
-    "list",
-    "list after other_99",
-    "list after other_199",
-  ]);
-  assert.deepEqual(resend.readyMarks, [true]);
-});
-
-test("a domain is only called missing once every page has been read", async () => {
-  const resend = fakeResend({
-    domains: Array.from({ length: 150 }, (_, index) => ({
-      id: `other_${String(index)}`,
-      name: `client-${String(index)}.example`,
-      records: [],
-      status: "verified",
-    })),
-  });
-
-  assert.equal((await getEmailStatus(resend.options)).state, "domain_missing");
-  assert.deepEqual(resend.calls, ["list", "list after other_99"]);
-  assert.deepEqual(resend.readyMarks, [false]);
-});
-
-test("a key that may only send points the administrator at Resend instead", async () => {
-  const resend = fakeResend({
-    errors: {
-      list: [
-        {
-          message: "This API key is restricted to only send emails",
-          name: "restricted_api_key",
-          statusCode: 401,
-        },
-      ],
-    },
-  });
-
-  assert.deepEqual(await getEmailStatus(resend.options), {
-    domain: "acme.com",
-    senderAddress: "sign@acme.com",
-    state: "restricted_key",
-  });
-  // Nothing was learned about the domain, so the mark is left alone.
-  assert.deepEqual(resend.readyMarks, []);
-});
-
-test("a refusal that is not about what the key may do is shown, not blamed on the key", async () => {
-  // All three arrive as a 401 or a 403, like a send-only key does.
-  const refusals = [
-    {
-      message: "The acme.com domain has been registered already.",
-      name: "validation_error",
-      statusCode: 403,
-    },
-    {
-      message: "This API key is suspended",
-      name: "suspended_api_key",
-      statusCode: 403,
-    },
-    {
-      message: "API key is invalid",
-      name: "validation_error",
-      statusCode: 401,
-    },
-  ];
-
-  for (const refusal of refusals) {
-    const resend = fakeResend({ errors: { list: [refusal] } });
-
-    assert.deepEqual(await getEmailStatus(resend.options), {
-      message: refusal.message,
       senderAddress: "sign@acme.com",
-      state: "error",
-    });
-  }
-});
-
-test("a key without the scope to read domains counts as a send-only key", async () => {
-  const resend = fakeResend({
-    errors: {
-      list: [
-        {
-          message: "Access token is missing required scopes.",
-          name: "invalid_permission",
-          statusCode: 403,
-        },
-      ],
+      server: "smtp.acme.com:587",
+      state: "untested",
     },
-  });
-
-  assert.equal((await getEmailStatus(resend.options)).state, "restricted_key");
+  );
 });
 
-test("a domain that can send is ready even while Resend still waits on receiving", async () => {
-  const resend = fakeResend({
-    domains: [
-      {
-        id: "domain_1",
-        name: "acme.com",
-        records: [
-          { ...DKIM_RECORD, status: "verified" },
-          { ...SPF_MX_RECORD, status: "verified" },
-          {
-            name: "acme.com",
-            priority: 10,
-            record: "Receiving",
-            status: "pending",
-            type: "MX",
-            value: "inbound-smtp.us-east-1.amazonaws.com",
-          },
-        ],
-        status: "partially_verified",
-      },
-    ],
-  });
+test("after a test email has gone out, email is ready", async () => {
+  const readySettings = resolveSettings(
+    { ...stored, emailReadyAt: 1_800_000_100 },
+    env,
+  );
 
-  assert.deepEqual(await getEmailStatus(resend.options), {
-    domain: "acme.com",
-    senderAddress: "sign@acme.com",
-    state: "ready",
-  });
-  assert.deepEqual(resend.readyMarks, [true]);
-});
-
-test("a partly verified domain whose sending records are not all in is neither marked ready nor unmarked", async () => {
-  // Resend says such a domain may still send, through its other server.
-  // The records cannot settle it, so a test email is left to.
-  const resend = fakeResend({
-    domains: [
-      {
-        id: "domain_1",
-        name: "acme.com",
-        records: [{ ...DKIM_RECORD, status: "verified" }, SPF_MX_RECORD],
-        status: "partially_failed",
-      },
-    ],
-  });
-  const status = await getEmailStatus(resend.options);
-
-  assert.equal(status.state, "domain_pending");
-  // The page then says that a test email is what settles it.
   assert.equal(
-    status.state === "domain_pending" && status.mayAlreadySend,
+    (
+      await getEmailStatus({
+        env,
+        settings: readySettings,
+        transport: transport(async () => true),
+      })
+    ).state,
+    "ready",
+  );
+});
+
+test("a server that cannot be reached or refuses the sign-in is reported in its own words", async () => {
+  assert.deepEqual(
+    await getEmailStatus({
+      env,
+      settings,
+      transport: transport(async () => {
+        throw new Error("Invalid login: 535 Authentication failed");
+      }),
+    }),
+    {
+      message: "Invalid login: 535 Authentication failed",
+      senderAddress: "sign@acme.com",
+      server: "smtp.acme.com:587",
+      state: "error",
+    },
+  );
+});
+
+test("SMTP_FROM wins over the saved sender", async () => {
+  const fromEnv = { ...env, SMTP_FROM: "Acme <notify@acme.com>" };
+
+  assert.equal(
+    (
+      await getEmailStatus({
+        env: fromEnv,
+        settings: resolveSettings(stored, fromEnv),
+        transport: transport(async () => true),
+      })
+    ).state === "untested",
     true,
   );
-  assert.deepEqual(resend.readyMarks, []);
 });
 
-test("any other failure is reported in Resend's own words", async () => {
-  const resend = fakeResend({
-    errors: {
-      list: [
-        {
-          message: "Something went wrong on our side",
-          name: "internal_server_error",
-          statusCode: 500,
-        },
-      ],
-    },
-  });
-
-  assert.deepEqual(await getEmailStatus(resend.options), {
-    message: "Something went wrong on our side",
-    senderAddress: "sign@acme.com",
-    state: "error",
-  });
-});
-
-test("a request turned away for going too fast is tried once more", async () => {
-  const resend = fakeResend({
-    errors: {
-      list: [
-        {
-          message: "Too many requests",
-          name: "rate_limit_exceeded",
-          statusCode: 429,
-        },
-      ],
-    },
-  });
-
-  assert.equal((await getEmailStatus(resend.options)).state, "domain_missing");
-  assert.deepEqual(resend.calls, ["list", "list"]);
+test("the capture driver is reported, or refused on a deployed site", async () => {
+  assert.deepEqual(
+    await getEmailStatus({ env: { EMAIL_DRIVER: "capture" }, settings }),
+    { state: "capture" },
+  );
+  assert.deepEqual(
+    await getEmailStatus({
+      env: {
+        APP_URL: "https://sign.acme.com",
+        EMAIL_DRIVER: "capture",
+        NODE_ENV: "production",
+      },
+      settings,
+    }),
+    { state: "capture_refused" },
+  );
 });
 
 test("the administrator is told about email until it has been seen working", () => {
@@ -686,7 +171,7 @@ test("the administrator is told about email until it has been seen working", () 
   );
 
   // When capture is refused in production or on Vercel, the administrator must
-  // be warned even if Resend had previously been marked ready.
+  // be warned even if email had previously been marked ready.
   const deployedProductionCaptureEnv = {
     APP_URL: "https://sign.example.com",
     EMAIL_DRIVER: "capture",
@@ -720,12 +205,4 @@ test("the administrator is told about email until it has been seen working", () 
     }),
     true,
   );
-});
-
-test("RESEND_REGION picks a known Resend region and ignores anything else", () => {
-  assert.deepEqual(resendRegionOption({ RESEND_REGION: "EU-WEST-1" }), {
-    region: "eu-west-1",
-  });
-  assert.deepEqual(resendRegionOption({ RESEND_REGION: "mars-1" }), {});
-  assert.deepEqual(resendRegionOption({}), {});
 });

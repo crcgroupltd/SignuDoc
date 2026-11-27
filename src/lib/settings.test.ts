@@ -48,7 +48,7 @@ test("stored settings are used as they are when the environment says nothing", (
 
 test("email addresses set in the environment win over the stored ones", () => {
   const settings = resolveSettings(stored, {
-    RESEND_FROM_EMAIL: "Acme Signing <noreply@mail.acme.com>",
+    SMTP_FROM: "Acme Signing <noreply@mail.acme.com>",
     SUPPORT_EMAIL: "desk@acme.com",
   });
 

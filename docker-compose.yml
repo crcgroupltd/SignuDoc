@@ -71,9 +71,15 @@ services:
       # set, setup asks for it, so finding the URL first is not enough.
       SETUP_TOKEN: CHANGE_ME_setup_token
 
-      # Email is sent through Resend (resend.com). Verify a sending domain
-      # there; Settings, Organization in the app shows its status.
-      RESEND_API_KEY: CHANGE_ME_resend_api_key
+      # Email is sent through your SMTP server. Port 587 uses STARTTLS;
+      # port 465 uses TLS from the start. Settings, Organization in the app
+      # checks the connection and sends a test email.
+      SMTP_HOST: smtp.example.com
+      SMTP_PORT: "587"
+      SMTP_USER: CHANGE_ME_smtp_user
+      SMTP_PASSWORD: CHANGE_ME_smtp_password
+      # The address mail comes from. The SMTP server must allow sending as it.
+      SMTP_FROM: SignuDoc <sign@example.com>
 
       # PDFs are kept on the signudoc-files volume. Leave these as they are.
       STORAGE_DRIVER: local
@@ -83,12 +89,16 @@ services:
       # Optional: uncomment to use
       # ----------------------------------------------------------------------
 
-      # Fix the sending and support addresses here instead of in the app.
-      # They then cannot be changed under Settings, Organization.
-      # RESEND_FROM_EMAIL: SignuDoc <sign@example.com>
+      # More SMTP settings. SMTP_SECURE forces TLS from the start (on by
+      # default for port 465). SMTP_REQUIRE_TLS refuses to send without
+      # STARTTLS. SMTP_TLS_VERIFY "0" accepts a server certificate that does
+      # not check out, for a relay on a private network.
+      # SMTP_SECURE: "1"
+      # SMTP_REQUIRE_TLS: "1"
+      # SMTP_TLS_VERIFY: "0"
+      # Without SMTP_FROM the sender is set in the app, under Settings,
+      # Organization. SUPPORT_EMAIL fixes where replies go the same way.
       # SUPPORT_EMAIL: support@example.com
-      # Resend region: us-east-1 (default), eu-west-1, sa-east-1, ap-northeast-1.
-      # RESEND_REGION: eu-west-1
 
       # Background jobs run inside the app: the daily cleanup and deadline
       # expiry, and webhook retries every 5 minutes. "off" stops them.

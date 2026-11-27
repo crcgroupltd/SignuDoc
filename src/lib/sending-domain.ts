@@ -6,24 +6,19 @@ import {
 
 // Where this site's email is sent from, as setup offers it.
 //
-// Mail is sent through Resend, which only sends from a domain whose DNS
-// records prove it belongs to you. Setup does not ask for that address
+// Mail is sent through the SMTP server in SMTP_HOST, which decides which
+// From addresses it accepts; most only take addresses at a domain set up
+// with them (SPF and DKIM records). Setup does not ask for the address
 // blind: it guesses the organization's domain from what it already knows
-// (the site's own address, the administrator's email, the support email),
-// and puts a subdomain in front of it, "sign." unless the administrator
-// picks another or none.
-//
-// A subdomain is what Resend recommends. Its records (DKIM at
-// resend._domainkey.sign.acme.com, SPF and the bounce MX at
-// send.sign.acme.com) sit apart from whatever already sends mail for
-// acme.com, and its sending reputation is its own.
-// https://resend.com/docs/knowledge-base/is-it-better-to-send-emails-from-a-subdomain-or-the-root-domain
+// (the site's own address, the administrator's email, the support email).
+// The administrator can put a subdomain in front of it, if the mail server
+// is set up to send from one. SMTP_FROM, when set, skips the question.
 
 export const DEFAULT_SENDING_SUBDOMAIN = "sign";
 export const DEFAULT_SENDER_LOCAL_PART = "notifications";
 
 // Hosts that can never be a sending domain of the organization's own: the
-// platform's shared domains, Resend's test domain and local names.
+// hosting platforms' shared domains, test domains and local names.
 const SHARED_HOST_SUFFIXES = [
   "vercel.app",
   "vercel.dev",
@@ -47,7 +42,7 @@ function isSharedHost(domain: string): boolean {
 }
 
 /**
- * A domain the organization could own and verify with Resend: a real
+ * A domain the organization could own and send from: a real
  * domain, not a public mailbox provider's and not a platform's shared one.
  */
 export function isOwnableDomain(value: string): boolean {
@@ -221,36 +216,4 @@ export function buildSenderAddress(
     error: null,
     sendingDomain,
   };
-}
-
-/**
- * The Resend integration on the Vercel Marketplace asks for a domain when it
- * is installed, sets it up in Resend and hands it to the project as
- * RESEND_EMAIL_DOMAIN. Setup starts from that domain as it is, since its
- * DNS records may already be in place. One that begins with "sign." is
- * shown as that subdomain of its parent, so the form reads the same way.
- */
-export function readResendEmailDomain(
-  value: string | null | undefined,
-): SenderAddressParts | null {
-  const domain = value ? normalizeEmailDomain(value) : null;
-
-  if (!domain || !isOwnableDomain(domain)) {
-    return null;
-  }
-
-  const prefix = `${DEFAULT_SENDING_SUBDOMAIN}.`;
-  const parent = domain.startsWith(prefix) ? domain.slice(prefix.length) : null;
-
-  return parent && isOwnableDomain(parent)
-    ? {
-        localPart: DEFAULT_SENDER_LOCAL_PART,
-        rootDomain: parent,
-        subdomain: DEFAULT_SENDING_SUBDOMAIN,
-      }
-    : {
-        localPart: DEFAULT_SENDER_LOCAL_PART,
-        rootDomain: domain,
-        subdomain: "",
-      };
 }

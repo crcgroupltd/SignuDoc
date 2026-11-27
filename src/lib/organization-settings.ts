@@ -186,7 +186,7 @@ const FIELD_MESSAGES: Record<OrganizationSettingsField, string> = {
 /**
  * Drops the fields the form shows but cannot change, before anything is
  * checked. The form sends them back as displayed, and a value fixed by the
- * environment need not pass the form's rules: RESEND_FROM_EMAIL may carry a
+ * environment need not pass the form's rules: SMTP_FROM may carry a
  * display name ("Acme <sign@acme.com>"), which is not a bare address.
  */
 function withoutLockedFields(

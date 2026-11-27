@@ -122,12 +122,12 @@ export default async function SignerPrivacyPage() {
         </h2>
         <p>
           The other parties to the document see your name, email and signature.
-          The services that run this site process it for {organization}: the
-          hosting provider (Vercel), the database provider (such as Neon), file
-          storage (Vercel Blob) and the email provider (Resend). Some are based
-          in the United States; where information leaves the European Economic
-          Area, it is protected by the EU-US Data Privacy Framework or by
-          standard contractual clauses.
+          This site, its database and its document storage run on servers that{" "}
+          {organization} operates or rents, and email is sent through a mail
+          server that {organization} chooses. Those providers process it only on{" "}
+          {organization}&apos;s behalf. Where information leaves the European
+          Economic Area, {organization} is responsible for protecting it, for
+          example with standard contractual clauses.
         </p>
       </section>
 

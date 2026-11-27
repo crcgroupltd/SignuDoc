@@ -2,15 +2,6 @@ import { SIGNUDOC_NAME } from "../branding.ts";
 import { truncateToWholeCharacters } from "../text-truncate.ts";
 
 // Which addresses email is sent from and replied to.
-//
-// Until an organization has verified its own domain with Resend, mail goes
-// out from Resend's shared testing address. Resend only delivers that mail
-// to the email address of the Resend account's owner, which is enough to try
-// the install but not to send documents to anyone else.
-// https://resend.com/docs/knowledge-base/403-error-resend-dev-domain
-
-export const RESEND_TEST_SENDER_ADDRESS = "onboarding@resend.dev";
-export const RESEND_TEST_SENDER_DOMAIN = "resend.dev";
 
 export type EmailAddresses = {
   /** The From header, with a display name. */
@@ -44,10 +35,6 @@ export function getAddressDomain(value: string): string | null {
   return address.slice(separatorIndex + 1);
 }
 
-export function isResendTestSender(value: string): boolean {
-  return getAddressDomain(value) === RESEND_TEST_SENDER_DOMAIN;
-}
-
 // A display name goes into an email header, so anything with a meaning there
 // (quotes, angle brackets, separators, line breaks) is dropped.
 function cleanDisplayName(value: string | null): string {
@@ -66,9 +53,13 @@ function hasDisplayName(value: string): boolean {
   return /<[^<>]+>\s*$/.test(value);
 }
 
+/**
+ * The From and Reply-To addresses. fallbackSenderAddress is used when
+ * neither SMTP_FROM nor Settings names a sender.
+ */
 export function buildEmailAddresses(
   settings: EmailAddressSettings,
-  fallbackSenderAddress: string = RESEND_TEST_SENDER_ADDRESS,
+  fallbackSenderAddress: string,
 ): EmailAddresses {
   const configuredSender = settings.senderAddress?.trim() || null;
   const displayName = cleanDisplayName(

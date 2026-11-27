@@ -380,10 +380,10 @@ test("signers saved for a draft do not land on an envelope that was sent meanwhi
 test("sending with no email provider is refused as a setup state and leaves the draft as it was (issue #53)", async () => {
   const draft = await createDraft();
   const driverBefore = process.env.EMAIL_DRIVER;
-  const keyBefore = process.env.RESEND_API_KEY;
+  const keyBefore = process.env.SMTP_HOST;
 
   delete process.env.EMAIL_DRIVER;
-  delete process.env.RESEND_API_KEY;
+  delete process.env.SMTP_HOST;
 
   try {
     await assert.rejects(
@@ -405,9 +405,9 @@ test("sending with no email provider is refused as a setup state and leaves the 
     process.env.EMAIL_DRIVER = driverBefore;
 
     if (keyBefore === undefined) {
-      delete process.env.RESEND_API_KEY;
+      delete process.env.SMTP_HOST;
     } else {
-      process.env.RESEND_API_KEY = keyBefore;
+      process.env.SMTP_HOST = keyBefore;
     }
   }
 

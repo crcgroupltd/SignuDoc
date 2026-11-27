@@ -17,10 +17,8 @@ import { cn } from "@/lib/cn";
 import {
   buildSenderAddress,
   DEFAULT_SENDER_LOCAL_PART,
-  DEFAULT_SENDING_SUBDOMAIN,
   joinSendingDomain,
   normalizeSubdomain,
-  readResendEmailDomain,
   suggestSendingRootDomain,
   type SenderAddressParts,
 } from "@/lib/sending-domain";
@@ -40,8 +38,6 @@ type SetupShellProps = {
    * or one is saved already. Its domain helps guess the sending domain.
    */
   knownSupportAddress: string | null;
-  /** RESEND_EMAIL_DOMAIN, set by the Resend integration on Vercel. */
-  resendDomain: string | null;
   /** The host this site answers on, used to guess the sending domain. */
   siteHost: string | null;
   view: SetupShellView;
@@ -72,7 +68,6 @@ export function SetupShell({
   hosted,
   knownSupportAddress,
   onVercel,
-  resendDomain,
   siteHost,
   view,
 }: SetupShellProps) {
@@ -92,7 +87,6 @@ export function SetupShell({
               hosted={hosted}
               knownSupportAddress={knownSupportAddress}
               onVercel={onVercel}
-              resendDomain={resendDomain}
               siteHost={siteHost}
               view={view}
             />
@@ -109,7 +103,6 @@ function SetupContent({
   hosted,
   knownSupportAddress,
   onVercel,
-  resendDomain,
   siteHost,
   view,
 }: SetupShellProps) {
@@ -200,7 +193,6 @@ function SetupContent({
     <SetupForm
       hosted={hosted}
       knownSupportAddress={knownSupportAddress}
-      resendDomain={resendDomain}
       siteHost={siteHost}
       view={view}
     />
@@ -251,34 +243,24 @@ type SenderErrors = Partial<Record<keyof SenderAddressParts, string>>;
 function SetupForm({
   hosted,
   knownSupportAddress,
-  resendDomain,
   siteHost,
   view,
 }: {
   hosted: boolean;
   knownSupportAddress: string | null;
-  resendDomain: string | null;
   siteHost: string | null;
   view: Extract<SetupShellView, { view: "claim" | "create" }>;
 }) {
   const [values, setValues] = useState<SetupValues>(emptyValues);
-  // The domain the Resend integration set up comes first. Without one,
-  // until the administrator types a domain of their own, it follows what
+  // Until the administrator types a domain of their own, it follows what
   // setup can tell from the site's address and the emails typed above.
-  const [integrationSender] = useState(() =>
-    readResendEmailDomain(resendDomain),
-  );
-  const [sender, setSender] = useState<SenderAddressParts>(
-    () =>
-      integrationSender ?? {
-        localPart: DEFAULT_SENDER_LOCAL_PART,
-        rootDomain: "",
-        subdomain: DEFAULT_SENDING_SUBDOMAIN,
-      },
-  );
-  const [rootDomainEdited, setRootDomainEdited] = useState(
-    integrationSender !== null,
-  );
+  // No subdomain by default: most mail servers send from the main domain.
+  const [sender, setSender] = useState<SenderAddressParts>(() => ({
+    localPart: DEFAULT_SENDER_LOCAL_PART,
+    rootDomain: "",
+    subdomain: "",
+  }));
+  const [rootDomainEdited, setRootDomainEdited] = useState(false);
   const [senderErrors, setSenderErrors] = useState<SenderErrors>({});
   const [errors, setErrors] = useState<SetupErrors>({});
   const [bannerMessage, setBannerMessage] = useState<string | null>(null);
@@ -512,12 +494,7 @@ function SetupForm({
             parts={senderParts}
             serverError={errors.senderAddress}
             source={
-              integrationSender &&
-              sender.rootDomain === integrationSender.rootDomain
-                ? "integration"
-                : !rootDomainEdited && suggestedRootDomain !== null
-                  ? "guess"
-                  : null
+              !rootDomainEdited && suggestedRootDomain !== null ? "guess" : null
             }
           />
         ) : null}
@@ -596,7 +573,7 @@ function SenderFields({
   parts: SenderAddressParts;
   serverError?: string;
   /** Where the domain shown came from, if setup filled it in. */
-  source: "guess" | "integration" | null;
+  source: "guess" | null;
 }) {
   const built = buildSenderAddress(parts);
   const rootDomain = parts.rootDomain.trim().toLowerCase();
@@ -617,8 +594,8 @@ function SenderFields({
         Send email from
       </legend>
       <p className={senderHelperClass}>
-        Optional. Email is sent through Resend from a domain your organization
-        owns. Leave the domain empty to decide later in Settings.
+        Optional. The address email comes from. Your mail server must be allowed
+        to send from it. Leave the domain empty to decide later in Settings.
       </p>
 
       <div className="space-y-2 text-sm">
@@ -645,11 +622,9 @@ function SenderFields({
           id="setup-sender-domain-description"
         >
           {rootError ??
-            (source === "integration"
-              ? "The domain the Resend integration was set up with on Vercel."
-              : source === "guess"
-                ? "Filled in from this site's address and the emails above. Change it if your organization uses another domain."
-                : "The domain your organization's email uses, such as acmecorp.com.")}
+            (source === "guess"
+              ? "Filled in from this site's address and the emails above. Change it if your organization uses another domain."
+              : "The domain your organization's email uses, such as acmecorp.com.")}
         </p>
       </div>
 
@@ -685,8 +660,8 @@ function SenderFields({
         >
           {errors.subdomain ??
             (subdomain
-              ? `Recommended. Mail comes from ${sendingDomain ?? `${subdomain}.acmecorp.com`}, so its DNS records and sending reputation stay apart from your everyday email. Clear it to send from ${rootDomain || "the domain"} itself.`
-              : `Mail will come from ${rootDomain || "the domain"} itself. A subdomain such as ${DEFAULT_SENDING_SUBDOMAIN} keeps it apart from your everyday email.`)}
+              ? `Mail comes from ${sendingDomain ?? `${subdomain}.acmecorp.com`}. Only use a subdomain your mail server is set up to send from.`
+              : `Optional. Mail will come from ${rootDomain || "the domain"} itself.`)}
         </p>
       </div>
 
@@ -728,9 +703,7 @@ function SenderFields({
         <p className="rounded-xl bg-(--surface) px-4 py-3 text-xs leading-5 text-(--secondary)">
           Emails will come from{" "}
           <strong className="font-semibold text-(--fg)">{built.address}</strong>
-          . If Resend is connected, setup adds {built.sendingDomain} to it, and
-          the next screen lists the DNS records to add where your domain is
-          managed.
+          . Settings, Organization can send a test email once setup is done.
         </p>
       ) : null}
     </fieldset>

@@ -1,9 +1,4 @@
-import { isResendTestSender } from "./services/email-addresses.ts";
-import {
-  createEmailService,
-  resolveEmailAddresses,
-  type EmailService,
-} from "./services/email.ts";
+import { createEmailService, type EmailService } from "./services/email.ts";
 import { withUserEmailLegalFooter } from "./services/email-legal-footer.ts";
 import { getBranding, getSettings, markEmailReady } from "./settings.ts";
 import { type EnvSource } from "./utils/env.ts";
@@ -48,10 +43,9 @@ export async function sendTestEmail({
       env,
     );
 
-    // Which sender this test is about to prove, noted before it is sent:
-    // an administrator may save a different one while it is on its way.
+    // The settings this test is about to prove, read before it is sent: an
+    // administrator may save a different sender while it is on its way.
     const testedSettings = await getSettings(env);
-    const { senderAddress: testedSender } = await resolveEmailAddresses(env);
 
     await (emailService ?? createEmailService({ env })).send({
       htmlBody: content.htmlBody,
@@ -61,13 +55,9 @@ export async function sendTestEmail({
       to,
     });
 
-    // A message accepted from the organization's own address means that
-    // address's domain is verified, even when the API key is not allowed to
-    // say so. The shared test address proves nothing: it only ever reaches
-    // the owner of the Resend account.
-    if (!isResendTestSender(testedSender)) {
-      await markEmailReady(true, testedSettings);
-    }
+    // The mail server accepted a message from this sender. Saving another
+    // sender clears the mark again.
+    await markEmailReady(true, testedSettings);
 
     return { sent: true, to };
   } catch (error) {

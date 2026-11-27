@@ -1409,11 +1409,11 @@ test("a missing email configuration rolls the correction back", async () => {
   });
   const previous = {
     EMAIL_DRIVER: process.env.EMAIL_DRIVER,
-    RESEND_API_KEY: process.env.RESEND_API_KEY,
+    SMTP_HOST: process.env.SMTP_HOST,
   };
 
   process.env.EMAIL_DRIVER = "resend";
-  delete process.env.RESEND_API_KEY;
+  delete process.env.SMTP_HOST;
 
   try {
     await assert.rejects(
@@ -1422,7 +1422,7 @@ test("a missing email configuration rolls the correction back", async () => {
       }),
       (error: unknown) => {
         assert.ok(error instanceof Error);
-        assert.match(error.message, /RESEND_API_KEY/);
+        assert.match(error.message, /SMTP_HOST/);
         return true;
       },
     );
@@ -1433,10 +1433,10 @@ test("a missing email configuration rolls the correction back", async () => {
       process.env.EMAIL_DRIVER = previous.EMAIL_DRIVER;
     }
 
-    if (previous.RESEND_API_KEY === undefined) {
-      delete process.env.RESEND_API_KEY;
+    if (previous.SMTP_HOST === undefined) {
+      delete process.env.SMTP_HOST;
     } else {
-      process.env.RESEND_API_KEY = previous.RESEND_API_KEY;
+      process.env.SMTP_HOST = previous.SMTP_HOST;
     }
   }
 

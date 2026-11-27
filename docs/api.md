@@ -103,8 +103,7 @@ On top of that, each key may create 60 envelopes in 10 minutes and send 100
 in an hour, counting creates and template calls that also send. A retry that
 gets its first answer again, through an `Idempotency-Key`, counts against
 neither. Your email
-provider's own limits usually bite first: Resend's free plan sends 100
-emails a day. An address that sends 30 bad keys in 10 minutes gets 429 for
+provider's own limits usually bite first. An address that sends 30 bad keys in 10 minutes gets 429 for
 any more bad keys until the 10 minutes are up. Good keys from it keep
 working.
 

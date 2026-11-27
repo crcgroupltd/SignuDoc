@@ -6,6 +6,7 @@ import { getSignerPalette } from "@/components/envelopes/signer-palette";
 import { ShellButton } from "@/components/shared/form-shell";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusPanel } from "@/components/shared/status-panel";
+import { prefillDefaults } from "@/lib/prefill";
 import { duplicateSignerEmailMessage } from "@/lib/schemas/signer";
 import type { PrefillValues } from "@/lib/schemas/template";
 import type { UseTemplateData } from "@/lib/templates";
@@ -69,7 +70,11 @@ export function UseTemplateShell({
   const [people, setPeople] = useState<Person[]>(() =>
     (template?.roles ?? []).map(() => ({ email: "", name: "" })),
   );
-  const [prefill, setPrefill] = useState<PrefillValues>({});
+  // Each box starts with the template's default, which the sender can
+  // keep or change.
+  const [prefill, setPrefill] = useState<PrefillValues>(() =>
+    prefillDefaults(template?.prefillFields ?? []),
+  );
   const [prefillError, setPrefillError] = useState<{
     fieldId: string;
     message: string;

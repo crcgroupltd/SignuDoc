@@ -112,10 +112,13 @@ type PrepareLiveShellProps = {
 };
 
 type PrepareField = FieldPlacement & {
+  /** A prefill box's starting value, set in the template editor. */
+  defaultValue?: string | boolean;
   id: string;
 };
 
 type LiveFieldSource = Array<{
+  defaultValue?: string | boolean;
   groupId?: string;
   height: number;
   id: string;
@@ -173,6 +176,7 @@ type FieldEditorProps = {
   isPrefill: boolean;
   onAddRadioButton: () => void;
   onDelete: () => void;
+  onSetDefault: (defaultValue: string | boolean | undefined) => void;
   onSetLabel: (label: string | undefined) => void;
   onSetOptions: (options: string[]) => void;
   onSetRequired: (required: boolean) => void;
@@ -340,6 +344,13 @@ function buildLiveFields(
   fields: LiveFieldSource | PrepareEnvelopeData["fields"],
 ) {
   return fields.map((field, index) => ({
+    // Only a template's prefill boxes carry one.
+    defaultValue:
+      "defaultValue" in field &&
+      (typeof field.defaultValue === "string" ||
+        typeof field.defaultValue === "boolean")
+        ? field.defaultValue
+        : undefined,
     groupId: field.groupId,
     height: field.height,
     id: field.id ?? `field-${index + 1}`,
@@ -387,6 +398,7 @@ function clearSelectedFieldFromViewportClick(
 function buildFieldRequest(fields: readonly PrepareField[]) {
   return {
     fields: fields.map((field) => ({
+      defaultValue: field.defaultValue,
       groupId: field.type === "radio" ? field.groupId : undefined,
       height: roundNormalized(field.height),
       id: field.id,
@@ -635,10 +647,21 @@ function PrepareLiveShellContent({
           addRadioButton(selectedField.id, setFields, setSelectedFieldId),
         onDelete: () =>
           deleteField(selectedField.id, setFields, setSelectedFieldId),
+        onSetDefault: (defaultValue: string | boolean | undefined) =>
+          setFieldDefault(selectedField.id, defaultValue, setFields),
         onSetLabel: (label: string | undefined) =>
           updateField(selectedField.id, { label }, setFields),
-        onSetOptions: (options: string[]) =>
-          updateField(selectedField.id, { options }, setFields),
+        onSetOptions: (options: string[]) => {
+          updateField(selectedField.id, { options }, setFields);
+
+          // A default that is no longer one of the choices is dropped.
+          if (
+            typeof selectedField.defaultValue === "string" &&
+            !options.includes(selectedField.defaultValue)
+          ) {
+            setFieldDefault(selectedField.id, undefined, setFields);
+          }
+        },
         onSetRequired: (required: boolean) =>
           setFieldRequired(selectedField.id, required, setFields),
         onSignerChange: (signerId: string) => {
@@ -1795,12 +1818,111 @@ function SaveStatusIndicator({
   );
 }
 
+/**
+ * A prefill box's default value: filled in on the "use template" form,
+ * where the sender can keep or change it.
+ */
+function PrefillDefaultEditor({
+  field,
+  idPrefix,
+  onSetDefault,
+}: {
+  field: PrepareField;
+  idPrefix: string;
+  onSetDefault: (defaultValue: string | boolean | undefined) => void;
+}) {
+  const savedText =
+    typeof field.defaultValue === "string" ? field.defaultValue : undefined;
+  // Kept as typed, for the same reason as the label: the field holds the
+  // tidied value.
+  const [textDraft, setTextDraft] = useState(savedText ?? "");
+  const shownText = labelTextToShow(textDraft, savedText);
+  const help =
+    "Filled in when the template is used. The sender can keep it or change it.";
+
+  if (field.type === "checkbox" || field.type === "radio") {
+    return (
+      <div>
+        <p className="px-1 text-[0.8125rem] font-semibold text-(--secondary)">
+          Default value
+        </p>
+        <label className="mt-2 flex min-h-11 items-center gap-2.5 rounded-xl bg-(--surface) px-3 text-sm font-bold text-(--fg)">
+          <input
+            checked={field.defaultValue === true}
+            onChange={(event) =>
+              onSetDefault(event.target.checked ? true : undefined)
+            }
+            type="checkbox"
+          />
+          {field.type === "radio" ? "Chosen by default" : "Ticked by default"}
+        </label>
+        <p className="mt-1.5 px-1 text-xs leading-5 text-(--tertiary)">
+          {help}
+        </p>
+      </div>
+    );
+  }
+
+  const inputId = `${idPrefix}-input`;
+
+  return (
+    <div>
+      <label
+        className="block px-1 text-[0.8125rem] font-semibold text-(--secondary)"
+        htmlFor={inputId}
+      >
+        Default value
+      </label>
+      {field.type === "dropdown" ? (
+        <select
+          aria-describedby={`${inputId}-help`}
+          className="field-input mt-2"
+          id={inputId}
+          onChange={(event) => onSetDefault(event.target.value || undefined)}
+          value={savedText ?? ""}
+        >
+          <option value="">No default</option>
+          {(field.options ?? []).map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <input
+          aria-describedby={`${inputId}-help`}
+          className="field-input mt-2"
+          id={inputId}
+          inputMode={field.type === "number" ? "decimal" : undefined}
+          maxLength={field.type === "number" ? 40 : 2000}
+          onChange={(event) => {
+            setTextDraft(event.target.value);
+            onSetDefault(
+              toWellFormedText(event.target.value).trim() || undefined,
+            );
+          }}
+          placeholder={field.type === "date" ? undefined : "No default"}
+          type={field.type === "date" ? "date" : "text"}
+          value={field.type === "date" ? (savedText ?? "") : shownText}
+        />
+      )}
+      <p
+        className="mt-1.5 px-1 text-xs leading-5 text-(--tertiary)"
+        id={`${inputId}-help`}
+      >
+        {help}
+      </p>
+    </div>
+  );
+}
+
 function FieldEditor({
   field,
   groupSize,
   isPrefill,
   onAddRadioButton,
   onDelete,
+  onSetDefault,
   onSetLabel,
   onSetOptions,
   onSetRequired,
@@ -1985,6 +2107,14 @@ function FieldEditor({
           </div>
         ) : null}
 
+        {isPrefill ? (
+          <PrefillDefaultEditor
+            field={field}
+            idPrefix={`${editorId}-default`}
+            onSetDefault={onSetDefault}
+          />
+        ) : null}
+
         {isOptionalField ? (
           <div>
             <p className="px-1 text-[0.8125rem] font-semibold text-(--secondary)">
@@ -2109,6 +2239,36 @@ function reassignField(
     return currentFields.map((field) =>
       target && isSameChoice(target, field) ? { ...field, signerId } : field,
     );
+  });
+}
+
+/**
+ * Sets a prefill box's default value. Choosing a radio button as the
+ * default clears the others in its group, as choosing it would.
+ */
+function setFieldDefault(
+  fieldId: string,
+  defaultValue: string | boolean | undefined,
+  setFields: Dispatch<SetStateAction<PrepareField[]>>,
+) {
+  setFields((currentFields) => {
+    const target = currentFields.find((field) => field.id === fieldId);
+
+    return currentFields.map((field) => {
+      if (field.id === fieldId) {
+        return { ...field, defaultValue };
+      }
+
+      if (
+        defaultValue === true &&
+        target?.type === "radio" &&
+        isSameChoice(target, field)
+      ) {
+        return { ...field, defaultValue: undefined };
+      }
+
+      return field;
+    });
   });
 }
 

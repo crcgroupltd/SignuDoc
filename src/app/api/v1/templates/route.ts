@@ -18,6 +18,8 @@ export async function GET(request: Request) {
           object: "template",
           // Boxes to give values for, by id, in "prefill" when using it.
           prefill: template.prefillFields.map((field) => ({
+            // Used when "prefill" gives nothing for the box.
+            default: field.defaultValue ?? null,
             id: field.id,
             label: field.label ?? null,
             ...(field.options ? { options: field.options } : {}),

@@ -34,7 +34,7 @@ services:
       retries: 30
 
   app:
-    # Pin a release (for example :1.2.3) or a commit (:sha-abc1234) instead of
+    # Pin a commit (for example :sha-abc1234) instead of
     # :latest to control when updates happen. The package is private unless
     # you make it public: run `docker login ghcr.io` on the host first, with
     # a token that has read:packages.

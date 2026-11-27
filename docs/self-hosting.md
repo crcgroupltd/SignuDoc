@@ -52,7 +52,7 @@ docker compose pull
 docker compose up -d
 ```
 
-The image is `ghcr.io/crcgroupltd/signudoc`, built and pushed by `.github/workflows/docker-image.yml`: `:latest` on every push to `main`, `:1.2.3` and `:1.2` for a `v1.2.3` tag, and `:sha-<commit>` for each build. Pin one of those in `docker-compose.yml` instead of `:latest` to choose when you update. To build from a checkout instead, `git pull && docker compose up -d --build`.
+The image is `ghcr.io/crcgroupltd/signudoc`, built and pushed by `.github/workflows/docker-image.yml`: `:latest` and `:sha-<commit>` each time `main` changes, and at no other time. Pin a `:sha-<commit>` tag in `docker-compose.yml` instead of `:latest` to choose when you update. To build from a checkout instead, `git pull && docker compose up -d --build`.
 
 The new image applies any new database migrations when it starts; they only ever apply what is new. Back up first (see [Backups](#backups)). If you keep your own changes to `docker-compose.yml`, `git stash` them before pulling and `git stash pop` after.
 

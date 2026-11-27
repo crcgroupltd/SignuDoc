@@ -39,7 +39,7 @@ Security fixes are applied to the latest release only.
 ## How the code is checked
 
 - **Tests.** Typecheck, lint, unit tests, tests against a real Postgres and an end-to-end browser test (`npm run typecheck`, `npm run lint`, `npm test`, `npm run test:db`, `npm run test:e2e`) are run before changes are merged. They are not run in GitHub Actions in this repository.
-- **Image.** `.github/workflows/docker-image.yml` builds the Docker image and publishes it to GitHub Container Registry on pushes to `main` and version tags, or when run by hand. Pull requests do not start a build. It is the only workflow.
+- **Image.** `.github/workflows/docker-image.yml` builds the Docker image and publishes it to GitHub Container Registry only when `main` changes. Nothing else starts it, pull requests included. It is the only workflow.
 - **Upstream checks.** The upstream project, [NYLLON-SOFTWARE/SignuDoc](https://github.com/NYLLON-SOFTWARE/SignuDoc), runs CodeQL, dependency review and OpenSSF Scorecard on its own repository.
 
 ## Verifying a release

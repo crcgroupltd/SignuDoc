@@ -98,8 +98,21 @@ export const MAX_PREFILL_TEXT_LENGTH = 2000;
  * with PREFILL_ASSIGNEE_ID in place of a role, and an id the "use" form
  * answers it by. Its label is what the sender is asked.
  */
+/**
+ * What a prefill box starts with, set when the template is made: text
+ * (YYYY-MM-DD for a date), or ticked for a checkbox or radio button. The
+ * sender can change it when using the template.
+ */
+export const prefillDefaultValueSchema = z.union([
+  z.string().max(MAX_PREFILL_TEXT_LENGTH),
+  z.boolean(),
+]);
+
 export const prefillFieldSchema = fieldPlacementSchema
-  .safeExtend({ id: idSchema })
+  .safeExtend({
+    defaultValue: prefillDefaultValueSchema.optional(),
+    id: idSchema,
+  })
   .superRefine((field, ctx) => {
     if ((NON_PREFILL_FIELD_TYPES as readonly string[]).includes(field.type)) {
       ctx.addIssue({
@@ -161,7 +174,12 @@ export const replaceTemplateRolesSchema = z.object({
 /** A template's fields as the field editor saves them. */
 export const replaceTemplateFieldsSchema = z.object({
   expectedRevision: z.number().int().min(0).optional(),
-  fields: z.array(fieldPlacementSchema),
+  // A prefill box may carry its default value; signer fields never do.
+  fields: z.array(
+    fieldPlacementSchema.safeExtend({
+      defaultValue: prefillDefaultValueSchema.optional(),
+    }),
+  ),
 });
 
 /** Starting an envelope from a template: who fills each role, in order. */

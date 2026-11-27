@@ -278,7 +278,56 @@ export function resolvePrefillValues(
   return filled;
 }
 
-/** Whether a template has a prefill box a sender must fill in. */
+/** The values a template's boxes start with, by box id. */
+export function prefillDefaults(
+  fields: readonly PrefillField[],
+): PrefillValues {
+  const defaults: PrefillValues = {};
+
+  for (const field of fields) {
+    if (field.defaultValue !== undefined) {
+      defaults[field.id] = field.defaultValue;
+    }
+  }
+
+  return defaults;
+}
+
+/**
+ * The sender's values over the template's defaults: a box the sender gave
+ * nothing for keeps its default. One they cleared stays clear.
+ */
+export function withPrefillDefaults(
+  fields: readonly PrefillField[],
+  values: PrefillValues,
+): PrefillValues {
+  return { ...prefillDefaults(fields), ...values };
+}
+
+/**
+ * Checks the defaults saved with a template the way a sender's values are
+ * checked, except that a box may be left without one.
+ */
+export function assertPrefillDefaults(fields: readonly PrefillField[]): void {
+  resolvePrefillValues(
+    fields.map((field) => ({ ...field, required: false })),
+    prefillDefaults(fields),
+  );
+}
+
+/**
+ * Whether a template has a required prefill box with no default, which
+ * the sender must fill in, so it cannot be sent to many at once.
+ */
 export function hasRequiredPrefill(fields: readonly PrefillField[]): boolean {
-  return fields.some((field) => field.required);
+  try {
+    resolvePrefillValues(fields, prefillDefaults(fields));
+    return false;
+  } catch (error) {
+    if (error instanceof PrefillError) {
+      return true;
+    }
+
+    throw error;
+  }
 }

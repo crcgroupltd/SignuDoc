@@ -347,6 +347,15 @@ export function buildOpenApiDocument(
                 "Boxes the sender fills in before sending. Give values for them by id in prefill when using the template.",
               items: {
                 properties: {
+                  default: {
+                    description:
+                      "Used when prefill gives no value for this box.",
+                    oneOf: [
+                      { type: "string" },
+                      { type: "boolean" },
+                      { type: "null" },
+                    ],
+                  },
                   id: { type: "string" },
                   label: { type: ["string", "null"] },
                   options: { items: { type: "string" }, type: "array" },
@@ -364,7 +373,7 @@ export function buildOpenApiDocument(
                     type: "string",
                   },
                 },
-                required: ["id", "label", "required", "type"],
+                required: ["default", "id", "label", "required", "type"],
                 type: "object",
               },
               type: "array",

@@ -1073,3 +1073,71 @@ test("a template with a required prefill box cannot be sent to many", async () =
     /one envelope at a time/,
   );
 });
+
+test("a prefill box's default is used when the sender gives no value", async () => {
+  const userId = await createUser();
+  const { saved, templateId } = await createEditedTemplate(userId);
+  const withDefault = saved.fields.map((field) =>
+    field.id === "fee-box" ? { ...field, defaultValue: "1,000" } : field,
+  );
+
+  // A default the box would refuse is refused when the template is saved.
+  await assert.rejects(
+    replaceTemplateFields(
+      userId,
+      templateId,
+      {
+        fields: saved.fields.map((field) =>
+          field.id === "fee-box" ? { ...field, defaultValue: "lots" } : field,
+        ),
+      },
+      { database },
+    ),
+    (error: unknown) =>
+      error instanceof TemplateError &&
+      error.statusCode === 400 &&
+      error.fieldId === "fee-box",
+  );
+
+  await replaceTemplateFields(
+    userId,
+    templateId,
+    { fields: withDefault },
+    { database },
+  );
+
+  const usable = await getUseTemplateDataForUser(userId, templateId, database);
+
+  assert.equal(
+    usable?.prefillFields.find((field) => field.id === "fee-box")?.defaultValue,
+    "1,000",
+  );
+
+  // With every required box defaulted, Send to many is allowed again.
+  const bulk = await getTemplateForBulkSend(userId, templateId, database, {
+    checkDropdownReadability: false,
+  });
+
+  assert.ok(bulk);
+  assert.equal(describeBulkSendPrefillProblem(bulk.prefillFields), null);
+
+  const made = await createDraftFromTemplate(
+    userId,
+    templateId,
+    {
+      signers: [
+        { email: "cara@example.test", name: "Cara Client" },
+        { email: "finn@example.test", name: "Finn Firm" },
+      ],
+      title: "Consulting with the default fee",
+    },
+    { database, storageService },
+  );
+  const document = await getDraftEnvelopeDocumentForUser(
+    userId,
+    made.envelopeId,
+    { database, storageService },
+  );
+
+  assert.notDeepEqual(new Uint8Array(document.body), sourcePdf);
+});

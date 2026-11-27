@@ -25,9 +25,11 @@ import {
   findChoiceFieldProblem,
 } from "./field-choices.ts";
 import {
+  assertPrefillDefaults,
   hasRequiredPrefill,
   PrefillError,
   resolvePrefillValues,
+  withPrefillDefaults,
 } from "./prefill.ts";
 import {
   fieldPlacementListSchema,
@@ -300,7 +302,7 @@ export function describeBulkSendPrefillProblem(
   prefillFields: readonly PrefillField[],
 ): string | null {
   return hasRequiredPrefill(prefillFields)
-    ? "This template has boxes that must be filled in before sending, so it can only be sent one envelope at a time. Use it from the Templates page instead."
+    ? "This template has boxes that must be filled in before sending and have no default value, so it can only be sent one envelope at a time. Give them defaults in the template, or use it from the Templates page instead."
     : null;
 }
 
@@ -754,7 +756,10 @@ export async function createDraftFromTemplate(
   let prefilled: ReturnType<typeof resolvePrefillValues>;
 
   try {
-    prefilled = resolvePrefillValues(prefillFields, parsedInput.prefill);
+    prefilled = resolvePrefillValues(
+      prefillFields,
+      withPrefillDefaults(prefillFields, parsedInput.prefill),
+    );
   } catch (error) {
     if (error instanceof PrefillError) {
       throw new TemplateError(error.message, 400, error.fieldId);
@@ -1346,6 +1351,21 @@ export async function replaceTemplateFields(
           "A prefill box could not be saved.",
         400,
       );
+    }
+
+    // A default must be a value the box would accept from the sender.
+    try {
+      assertPrefillDefaults(prefillFields.data);
+    } catch (error) {
+      if (error instanceof PrefillError) {
+        throw new TemplateError(
+          `Default value: ${error.message}`,
+          400,
+          error.fieldId,
+        );
+      }
+
+      throw error;
     }
 
     const now = Math.floor(Date.now() / 1000);

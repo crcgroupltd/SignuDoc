@@ -4,10 +4,13 @@ import { test } from "node:test";
 import { PDFDocument } from "pdf-lib";
 
 import {
+  assertPrefillDefaults,
   formatPrefillDate,
   hasRequiredPrefill,
+  prefillDefaults,
   PrefillError,
   resolvePrefillValues,
+  withPrefillDefaults,
 } from "./prefill.ts";
 import {
   PREFILL_ASSIGNEE_ID,
@@ -157,9 +160,79 @@ test("one radio button per group, and a required group needs one", () => {
   rejectsFor([yes, no], {}, /Choose one of: Yes, No/);
 });
 
-test("only required boxes stop Send to many", () => {
+test("only required boxes without a default stop Send to many", () => {
   assert.equal(hasRequiredPrefill([box({ required: false })]), false);
   assert.equal(hasRequiredPrefill([box({ required: true })]), true);
+  assert.equal(
+    hasRequiredPrefill([box({ defaultValue: "Acme", required: true })]),
+    false,
+  );
+  // A required radio group is covered when one button is the default.
+  assert.equal(
+    hasRequiredPrefill([
+      box({ defaultValue: true, groupId: "g", id: "a", type: "radio" }),
+      box({ groupId: "g", id: "b", type: "radio" }),
+    ]),
+    false,
+  );
+});
+
+test("a box the sender leaves out keeps its default, and one they clear stays clear", () => {
+  const fields = [
+    box({ defaultValue: "Acme Corp", id: "client" }),
+    box({ defaultValue: "Net 30", id: "terms", required: false }),
+    box({ defaultValue: true, id: "tick", required: false, type: "checkbox" }),
+  ];
+
+  assert.deepEqual(prefillDefaults(fields), {
+    client: "Acme Corp",
+    terms: "Net 30",
+    tick: true,
+  });
+
+  const merged = withPrefillDefaults(fields, { terms: "", tick: false });
+
+  assert.deepEqual(
+    resolvePrefillValues(fields, merged).map((entry) => [
+      entry.field.id,
+      entry.value ?? entry.checked,
+    ]),
+    [
+      ["client", "Acme Corp"],
+      ["tick", false],
+    ],
+  );
+});
+
+test("a default must be a value the box would accept", () => {
+  assert.doesNotThrow(() =>
+    assertPrefillDefaults([
+      box({ id: "a" }),
+      box({ defaultValue: "2026-12-01", id: "b", type: "date" }),
+    ]),
+  );
+  assert.throws(
+    () =>
+      assertPrefillDefaults([
+        box({ defaultValue: "soon", label: "Start", type: "date" }),
+      ]),
+    /Start needs a date/,
+  );
+  assert.throws(
+    () =>
+      assertPrefillDefaults([
+        box({ defaultValue: "Gold", options: ["Basic"], type: "dropdown" }),
+      ]),
+    /one of its choices/,
+  );
+  assert.throws(
+    () =>
+      assertPrefillDefaults([
+        box({ defaultValue: true, groupId: "g", id: "a", type: "radio" }),
+        box({ defaultValue: true, groupId: "g", id: "b", type: "radio" }),
+      ]),
+    /only one of/,
+  );
 });
 
 test("prefilled values are written into the document", async () => {

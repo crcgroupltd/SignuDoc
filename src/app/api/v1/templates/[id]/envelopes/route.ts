@@ -32,6 +32,10 @@ const bodySchema = z.object({
       { message: "Metadata must be at most 2048 bytes of JSON." },
     )
     .optional(),
+  // Values for the template's prefill boxes, by box id: text for text,
+  // name, number and dropdown boxes, YYYY-MM-DD for dates, true or false
+  // for checkboxes and radio buttons.
+  prefill: z.record(z.string(), z.union([z.string(), z.boolean()])).optional(),
   send: apiSendOptionsSchema.optional(),
   signers: z
     .array(
@@ -96,6 +100,7 @@ export async function POST(request: Request, context: Context) {
         text,
         async (remember) => {
           const draft = await createDraftFromTemplate(api.actor.userId, id, {
+            prefill: body.data.prefill,
             signers: body.data.signers,
             title: body.data.title,
           });

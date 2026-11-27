@@ -6,6 +6,7 @@ import { exampleCsvForRoles, MAX_BULK_SEND_ROWS } from "@/lib/bulk-send-csv";
 import { getDb } from "@/lib/db/connection";
 import { getSettings } from "@/lib/settings";
 import {
+  describeBulkSendPrefillProblem,
   describeUnsendableTemplate,
   getTemplateForBulkSend,
   TemplateError,
@@ -30,7 +31,8 @@ export default async function BulkSendPage({ params }: BulkSendPageProps) {
       ? await getTemplateForBulkSend(session.user.id, id, getDb())
       : null;
     const unsendable = loaded
-      ? describeUnsendableTemplate(loaded.roles, loaded.fields)
+      ? (describeUnsendableTemplate(loaded.roles, loaded.fields) ??
+        describeBulkSendPrefillProblem(loaded.prefillFields))
       : null;
 
     if (unsendable) {
@@ -60,6 +62,7 @@ export default async function BulkSendPage({ params }: BulkSendPageProps) {
         id: template.id,
         name: template.name,
         pageCountLabel: template.pageCountLabel,
+        prefillFields: template.prefillFields,
         roles: template.roles,
       }
     : undefined;

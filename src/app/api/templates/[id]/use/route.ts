@@ -60,10 +60,18 @@ export async function POST(request: Request, context: UseTemplateRouteContext) {
       );
     }
 
-    if (
-      error instanceof TemplateError ||
-      error instanceof EnvelopeMutationError
-    ) {
+    if (error instanceof TemplateError) {
+      // A prefill box's problem names the box, so the form can mark it.
+      return NextResponse.json(
+        {
+          error: error.message,
+          ...(error.fieldId ? { fieldId: error.fieldId } : {}),
+        },
+        { status: error.statusCode },
+      );
+    }
+
+    if (error instanceof EnvelopeMutationError) {
       return NextResponse.json(
         { error: error.message },
         { status: error.statusCode },

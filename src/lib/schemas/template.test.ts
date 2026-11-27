@@ -70,6 +70,8 @@ test("using a template takes a title and one person for each signer", () => {
   });
 
   assert.deepEqual(parsed, {
+    // No prefill values given: every prefill box is left empty.
+    prefill: {},
     signers: [{ email: "A@Example.com", name: "Ann" }],
     title: "Lease",
   });

@@ -62,7 +62,7 @@ The dashboard shows each document as a card with its first page, its status (dra
 
 ### Templates for the documents you send every week
 
-Open any envelope and choose Save as template. The template keeps the document, the fields and the signing order, with roles instead of names. Using it asks who signs this time and opens a draft ready to send. Send to many takes a CSV of names and addresses and sends one envelope per row.
+Make a template from Templates, New template: upload the document, name the roles that sign it ("Client", "Landlord") and place the fields, with no envelope involved. Or open any envelope and choose Save as template. Templates can also hold **prefill boxes**: text, dates, numbers, checkboxes, dropdowns and radio buttons you fill in each time you use the template, which are written into the document before it goes out. Using a template asks who signs this time and for the prefill values, then opens a draft ready to send. Send to many takes a CSV of names and addresses and sends one envelope per row, for templates without required prefill boxes.
 
 ### Send from your other apps
 

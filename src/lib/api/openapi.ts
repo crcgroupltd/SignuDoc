@@ -342,13 +342,40 @@ export function buildOpenApiDocument(
             id: { type: "string" },
             name: { type: "string" },
             object: { const: "template", type: "string" },
+            prefill: {
+              description:
+                "Boxes the sender fills in before sending. Give values for them by id in prefill when using the template.",
+              items: {
+                properties: {
+                  id: { type: "string" },
+                  label: { type: ["string", "null"] },
+                  options: { items: { type: "string" }, type: "array" },
+                  required: { type: "boolean" },
+                  type: {
+                    enum: [
+                      "date",
+                      "name",
+                      "text",
+                      "checkbox",
+                      "number",
+                      "dropdown",
+                      "radio",
+                    ],
+                    type: "string",
+                  },
+                },
+                required: ["id", "label", "required", "type"],
+                type: "object",
+              },
+              type: "array",
+            },
             roles: {
               description: "Its roles, in signing order.",
               items: { type: "string" },
               type: "array",
             },
           },
-          required: ["object", "id", "name", "roles"],
+          required: ["object", "id", "name", "prefill", "roles"],
           type: "object",
         },
         Upload: {
@@ -786,6 +813,14 @@ export function buildOpenApiDocument(
                     metadata: {
                       description:
                         "Up to 2048 bytes of JSON, returned with the envelope.",
+                      type: "object",
+                    },
+                    prefill: {
+                      additionalProperties: {
+                        oneOf: [{ type: "string" }, { type: "boolean" }],
+                      },
+                      description:
+                        "Values for the template's prefill boxes, by box id. Text for text, name, number and dropdown boxes; YYYY-MM-DD for dates; true or false for checkboxes and radio buttons. Written into the document before the envelope is made.",
                       type: "object",
                     },
                     send: { $ref: "#/components/schemas/SendOptions" },

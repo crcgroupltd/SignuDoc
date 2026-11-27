@@ -83,7 +83,11 @@ export function TemplatesShell({
 
   return (
     <div className="space-y-5">
-      <PageHeader description={pageDescription} title="Templates" />
+      <PageHeader
+        action={<ShellButton href="/templates/new">New template</ShellButton>}
+        description={pageDescription}
+        title="Templates"
+      />
 
       {templates.length === 0 ? (
         <section
@@ -100,11 +104,12 @@ export function TemplatesShell({
                 No templates yet
               </h2>
               <p className="text-[0.9375rem] leading-6 text-(--secondary)">
-                Open any document you have prepared or sent and choose Save as
-                template. Next time, you only name the people who sign.
+                Upload a document, name who signs it and place the fields once.
+                Next time, you only name the people who sign. You can also save
+                any document you have prepared as a template.
               </p>
             </div>
-            <ShellButton href="/dashboard">Go to documents</ShellButton>
+            <ShellButton href="/templates/new">New template</ShellButton>
           </div>
         </section>
       ) : (
@@ -153,6 +158,13 @@ export function TemplatesShell({
                   >
                     Delete
                   </button>
+                  <ShellButton
+                    className="min-h-11"
+                    href={`/templates/${template.id}/roles`}
+                    variant="secondary"
+                  >
+                    Edit
+                  </ShellButton>
                   <ShellButton
                     className="min-h-11"
                     href={`/templates/${template.id}/send-many`}

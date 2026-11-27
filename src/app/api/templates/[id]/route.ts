@@ -4,7 +4,8 @@ import { requireVerifiedSenderSession } from "@/lib/auth/route-session";
 import { getDb } from "@/lib/db/connection";
 import { logRouteError } from "@/lib/security/logging";
 import { getClientIpAddress, getRequestPathname } from "@/lib/security/request";
-import { deleteTemplate, TemplateError } from "@/lib/templates";
+import { templateErrorResponse } from "@/lib/template-route";
+import { deleteTemplate, renameTemplate, TemplateError } from "@/lib/templates";
 
 type TemplateRouteContext = {
   params: Promise<{
@@ -46,5 +47,30 @@ export async function DELETE(request: Request, context: TemplateRouteContext) {
       { error: "Unable to delete this template." },
       { status: 500 },
     );
+  }
+}
+
+/** Renames a template. */
+export async function PATCH(request: Request, context: TemplateRouteContext) {
+  const sessionResult = await requireVerifiedSenderSession(request);
+
+  if (sessionResult instanceof Response) {
+    return sessionResult;
+  }
+
+  const session = sessionResult;
+  const { id } = await context.params;
+  const body = (await request.json().catch(() => null)) as unknown;
+
+  try {
+    return NextResponse.json(
+      await renameTemplate(session.user.id, id, body, { database: getDb() }),
+    );
+  } catch (error) {
+    return templateErrorResponse(error, request, {
+      category: "template_rename_failure",
+      fallbackMessage: "Unable to rename this template.",
+      userId: session.user.id,
+    });
   }
 }

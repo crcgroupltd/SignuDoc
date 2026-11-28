@@ -7,16 +7,7 @@ import { ShellButton } from "@/components/shared/form-shell";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusPanel } from "@/components/shared/status-panel";
 import { StepIndicator } from "@/components/shared/step-indicator";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import type { ReviewEnvelopeData } from "@/lib/envelopes";
-import { PERMITTED_USE_PATH } from "@/lib/permitted-uses";
 import { formatReminderInterval } from "@/lib/services/reminders";
 import {
   DEFAULT_ENVELOPE_DEADLINE_DAYS,
@@ -102,7 +93,6 @@ export function ReviewShell({
   );
   const [signatureLevel, setSignatureLevel] =
     useState<SignatureLevel>("simple");
-  const [isConfirmationOpen, setIsConfirmationOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [sendPhase, setSendPhase] = useState<SendPhase>("idle");
   const [sendError, setSendError] = useState<string | null>(null);
@@ -116,26 +106,14 @@ export function ReviewShell({
     };
   }, []);
 
-  function closeConfirmation() {
-    if (sendPhase === "sending") {
+  // "Send envelope" sends at once: what will happen is shown beside the
+  // button, so there is nothing more to confirm.
+  async function handleSend() {
+    if (sendPhase === "sending" || notice) {
       return;
     }
 
-    setSendPhase("idle");
-    setIsConfirmationOpen(false);
-  }
-
-  function openConfirmation() {
     setNotice(null);
-    setSendError(null);
-    setSendPhase("idle");
-    setIsConfirmationOpen(true);
-  }
-
-  async function handleConfirmSend() {
-    if (sendPhase === "sending") {
-      return;
-    }
 
     if (sendTimeoutRef.current) {
       window.clearTimeout(sendTimeoutRef.current);
@@ -149,7 +127,6 @@ export function ReviewShell({
       const response = await fetch(`/api/envelopes/${envelopeId}/send`, {
         body: JSON.stringify({
           expiresInDays: deadlineDays,
-          permittedUseConfirmed: true,
           reminderIntervalDays: reminderDays,
           ...(record?.signingProvider ? { signatureLevel } : {}),
         }),
@@ -174,7 +151,6 @@ export function ReviewShell({
         payload?.notifiedSignerName?.trim() || firstSigner?.name || "Signer 1";
       const redirectPath = payload?.redirectPath || `/envelopes/${envelopeId}`;
 
-      setIsConfirmationOpen(false);
       setNotice(buildSuccessMessage(notifiedSignerName));
       setSendPhase("idle");
       sendTimeoutRef.current = window.setTimeout(() => {
@@ -503,66 +479,70 @@ export function ReviewShell({
           </div>
         ) : null}
 
+        {canSend && !notice ? (
+          <p
+            className="mt-5 text-sm leading-6 wrap-break-word text-(--secondary)"
+            data-testid="send-summary"
+          >
+            {describeSend({
+              approverCount: activeRecord.signers.filter(
+                (signer) => signer.role === "approver",
+              ).length,
+              deadlineDays,
+              firstSignerName:
+                firstStepNames.length > 1
+                  ? `${firstStepNames.slice(0, -1).join(", ")} and ${firstStepNames[firstStepNames.length - 1]}`
+                  : (firstSigner?.name ?? "Signer 1"),
+              firstStepSize: firstStepNames.length,
+              signatureType:
+                record.signingProvider && signatureLevel !== "simple"
+                  ? describeSignatureLevel(
+                      signatureLevel,
+                      record.signingProvider.name,
+                    )
+                  : null,
+              signerCount: activeRecord.signers.filter(
+                (signer) => signer.role !== "approver",
+              ).length,
+              title: activeRecord.title,
+            })}
+          </p>
+        ) : null}
+
+        {sendPhase === "error" && sendError ? (
+          <div className="notice notice-danger mt-5" role="alert">
+            <p>{sendError}</p>
+          </div>
+        ) : null}
+
         <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <ShellButton
+            disabled={sendPhase === "sending"}
             href={`/envelopes/${envelopeId}/prepare`}
             variant="secondary"
           >
             ← Back
           </ShellButton>
-          <ShellButton disabled={!canSend} onClick={openConfirmation}>
-            Send envelope
+          <ShellButton
+            disabled={!canSend || Boolean(notice)}
+            loading={sendPhase === "sending"}
+            onClick={() => void handleSend()}
+          >
+            {sendPhase === "sending" ? "Sending..." : "Send envelope"}
           </ShellButton>
         </div>
       </section>
-
-      {isConfirmationOpen ? (
-        <SendConfirmationDialog
-          deadlineDays={deadlineDays}
-          errorMessage={sendPhase === "error" ? sendError : null}
-          firstSignerName={
-            firstStepNames.length > 1
-              ? `${firstStepNames.slice(0, -1).join(", ")} and ${firstStepNames[firstStepNames.length - 1]}`
-              : (firstSigner?.name ?? "Signer 1")
-          }
-          firstStepSize={firstStepNames.length}
-          isSending={sendPhase === "sending"}
-          onCancel={closeConfirmation}
-          onConfirm={handleConfirmSend}
-          signatureType={
-            record.signingProvider && signatureLevel !== "simple"
-              ? describeSignatureLevel(
-                  signatureLevel,
-                  record.signingProvider.name,
-                )
-              : null
-          }
-          approverCount={
-            activeRecord.signers.filter((signer) => signer.role === "approver")
-              .length
-          }
-          signerCount={
-            activeRecord.signers.filter((signer) => signer.role !== "approver")
-              .length
-          }
-          title={activeRecord.title}
-        />
-      ) : null}
     </div>
   );
 }
 
-type SendConfirmationDialogProps = {
+type SendSummary = {
   /** Approvers in the signing order, who approve or reject. */
   approverCount: number;
   deadlineDays: number;
-  errorMessage: string | null;
   firstSignerName: string;
   /** How many signers are invited at once when it is sent. */
   firstStepSize: number;
-  isSending: boolean;
-  onCancel: () => void;
-  onConfirm: () => void;
   /** Set when signers sign through the install's signing provider. */
   signatureType: string | null;
   /** Signers in the signing order, not counting approvers. */
@@ -582,112 +562,35 @@ function describeSigningOrderPeople(
     : signers;
 }
 
-function SendConfirmationDialog({
+/** What sending will do, shown beside the Send button. */
+function describeSend({
   approverCount,
   deadlineDays,
-  errorMessage,
   firstSignerName,
   firstStepSize,
-  isSending,
-  onCancel,
-  onConfirm,
   signatureType,
   signerCount,
   title,
-}: SendConfirmationDialogProps) {
-  const [isPermittedUseConfirmed, setIsPermittedUseConfirmed] = useState(false);
+}: SendSummary): string {
   const peopleCount = signerCount + approverCount;
   const firstLabel = approverCount > 0 ? "person" : "signer";
+  const notified =
+    peopleCount === 1
+      ? `${firstSignerName} will be notified immediately.`
+      : firstStepSize > 1
+        ? `${firstSignerName} will be notified immediately, ${approverCount > 0 ? "to act" : "to sign"} at the same time.`
+        : `The first ${firstLabel} (${firstSignerName}) will be notified immediately.`;
 
-  return (
-    <Dialog
-      open
-      onOpenChange={(open) => {
-        if (!open && !isSending) {
-          onCancel();
-        }
-      }}
-    >
-      <DialogContent className="max-w-md sm:p-8" showCloseButton={false}>
-        <div className="space-y-4">
-          <DialogHeader className="space-y-3">
-            <DialogTitle>Send this envelope?</DialogTitle>
-            <DialogDescription asChild>
-              <div className="space-y-3 text-sm leading-6 text-(--secondary)">
-                <p>
-                  &quot;{title}&quot; will be sent to{" "}
-                  {describeSigningOrderPeople(signerCount, approverCount)}.{" "}
-                  {peopleCount === 1
-                    ? `${firstSignerName} will be notified immediately.`
-                    : firstStepSize > 1
-                      ? `${firstSignerName} will be notified immediately, ${approverCount > 0 ? "to act" : "to sign"} at the same time.`
-                      : `The first ${firstLabel} (${firstSignerName}) will be notified immediately.`}{" "}
-                  The request expires in {deadlineDays} days.
-                </p>
-                {signatureType ? (
-                  <p>
-                    Signature type: {signatureType}. It cannot be changed once
-                    the envelope is sent.
-                  </p>
-                ) : null}
-              </div>
-            </DialogDescription>
-          </DialogHeader>
-
-          <label className="well block px-4 py-4">
-            <span className="flex items-start gap-3">
-              <Checkbox
-                autoFocus
-                checked={isPermittedUseConfirmed}
-                className="mt-1"
-                disabled={isSending}
-                onCheckedChange={(checked) =>
-                  setIsPermittedUseConfirmed(checked === true)
-                }
-              />
-              <span className="text-sm leading-6 text-(--secondary)">
-                By sending, you confirm this document is an ordinary business
-                agreement and not a will, court order, legally required consumer
-                disclosure, or other{" "}
-                <a
-                  className="font-semibold text-(--accent-ink) underline decoration-[rgb(var(--accent-rgb)/0.35)] underline-offset-4"
-                  href={PERMITTED_USE_PATH}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  document that cannot be signed electronically
-                </a>
-                .
-              </span>
-            </span>
-          </label>
-
-          {errorMessage ? (
-            <div className="notice notice-danger" role="alert">
-              <p>{errorMessage}</p>
-            </div>
-          ) : null}
-
-          <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
-            <ShellButton
-              disabled={isSending}
-              onClick={onCancel}
-              variant="secondary"
-            >
-              Cancel
-            </ShellButton>
-            <ShellButton
-              disabled={!isPermittedUseConfirmed}
-              loading={isSending}
-              onClick={onConfirm}
-            >
-              {isSending ? "Sending..." : "Send now"}
-            </ShellButton>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
+  return [
+    `"${title}" will be sent to ${describeSigningOrderPeople(signerCount, approverCount)}.`,
+    notified,
+    `The request expires in ${String(deadlineDays)} days.`,
+    signatureType
+      ? `Signature type: ${signatureType}. It cannot be changed once the envelope is sent.`
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 function formatSignerFieldSummary(fields: readonly ReviewFieldSummaryLabel[]) {

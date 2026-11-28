@@ -8,13 +8,8 @@ import { after, before, test } from "node:test";
 import type pg from "pg";
 
 import { openTestDatabase } from "./db/test-database.ts";
-import {
-  deleteScheduledEnvelope,
-  ENVELOPE_DELETION_WAIT_DAYS,
-  scheduleEnvelopeDeletion,
-} from "./envelope-deletion.ts";
+import { deleteFinishedEnvelope } from "./envelope-deletion.ts";
 import { deleteEnvelopesAndFiles } from "./retention.ts";
-import type { EmailService } from "./services/email.ts";
 import { getRecipientCertificateKey } from "./services/storage-keys.ts";
 import {
   createStorageService,
@@ -27,11 +22,9 @@ import {
 import { verifyDocumentHash } from "./verify.ts";
 
 // Verifying unchanged signed PDFs and audit certificates before and after an
-// administrator's scheduled deletion, against a real Postgres. Run with
+// administrator deletes the envelope, against a real Postgres. Run with
 // `npm run test:db`.
 
-const DAY = 24 * 60 * 60;
-const WAIT = ENVELOPE_DELETION_WAIT_DAYS * DAY;
 
 let database: pg.Pool;
 let storageDir: string;
@@ -58,17 +51,6 @@ after(async () => {
 
 function randomSha256(): string {
   return randomBytes(32).toString("hex");
-}
-
-function createNoopOutbox(): EmailService {
-  return {
-    async send(message) {
-      return { accepted: [message.to], rejected: [] };
-    },
-    async sendBatch(messages) {
-      return Promise.all(messages.map((message) => this.send(message)));
-    },
-  };
 }
 
 async function createUser(role: "admin" | "user") {
@@ -229,8 +211,8 @@ for (const status of ["completed", "declined", "voided"] as const) {
       { match: false },
     );
 
-    // Schedule and execute deletion.
-    await scheduleEnvelopeDeletion(
+    // Delete it.
+    await deleteFinishedEnvelope(
       envelope.envelopeId,
       {
         actor: admin,
@@ -238,15 +220,7 @@ for (const status of ["completed", "declined", "voided"] as const) {
         reason: "Confidential HR cleanup",
         userAgent: "Test browser",
       },
-      { database, emailService: createNoopOutbox(), now },
-    );
-    assert.equal(
-      await deleteScheduledEnvelope(envelope.envelopeId, {
-        database,
-        now: now + WAIT,
-        storageService,
-      }),
-      true,
+      { database, now, storageService },
     );
 
     const [auditEvent] = await listSystemAuditEvents({ limit: 1 }, database);

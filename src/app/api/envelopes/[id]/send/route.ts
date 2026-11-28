@@ -25,7 +25,6 @@ type SendEnvelopeRequest = {
   expiresInDays?: unknown;
   reminderIntervalDays?: unknown;
   signatureLevel?: unknown;
-  permittedUseConfirmed?: boolean;
 };
 
 export async function POST(
@@ -59,20 +58,10 @@ export async function POST(
     .json()
     .catch(() => null)) as SendEnvelopeRequest | null;
 
-  if (body?.permittedUseConfirmed !== true) {
-    return NextResponse.json(
-      {
-        error:
-          "Confirm that this envelope is an ordinary business agreement before sending.",
-      },
-      { status: 400 },
-    );
-  }
-
   const options = sendEnvelopeOptionsSchema.safeParse({
-    expiresInDays: body.expiresInDays ?? undefined,
-    reminderIntervalDays: body.reminderIntervalDays ?? undefined,
-    signatureLevel: body.signatureLevel ?? undefined,
+    expiresInDays: body?.expiresInDays ?? undefined,
+    reminderIntervalDays: body?.reminderIntervalDays ?? undefined,
+    signatureLevel: body?.signatureLevel ?? undefined,
   });
 
   if (!options.success) {

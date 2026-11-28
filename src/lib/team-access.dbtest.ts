@@ -11,7 +11,7 @@ import { AuditExportError, exportEnvelopeAuditCsv } from "./audit-export.ts";
 import { openTestDatabase } from "./db/test-database.ts";
 import { DownloadAccessError, getSenderEnvelopeDownload } from "./downloads.ts";
 import { resolveEnvelopeViewerAccess } from "./envelope-access.ts";
-import { scheduleEnvelopeDeletion } from "./envelope-deletion.ts";
+import { deleteFinishedEnvelope } from "./envelope-deletion.ts";
 import {
   changeEnvelopeDeadline,
   changeEnvelopeReminders,
@@ -470,11 +470,10 @@ test("nobody but the sender changes an envelope", async () => {
     );
   }
 
-  // Only the sender or an administrator may ask for a finished envelope to
-  // be deleted (envelope-deletion.ts); seeing it through a team is not
-  // enough.
+  // Only an administrator may delete a finished envelope
+  // (envelope-deletion.ts); seeing it through a team is not enough.
   await assert.rejects(
-    scheduleEnvelopeDeletion(
+    deleteFinishedEnvelope(
       envelopes.completed,
       { actor: { email: teammate.email, userId: teammate.id } },
       { database },

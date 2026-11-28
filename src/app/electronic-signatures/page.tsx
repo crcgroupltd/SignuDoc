@@ -36,8 +36,7 @@ async function loadProductName(): Promise<string> {
   }
 }
 
-// On every install, hosted or not: senders confirm this list before each
-// send, and signers can read it.
+// On every install, hosted or not: senders and signers can read it.
 export default async function ElectronicSignaturesPage() {
   await connection();
 
@@ -92,8 +91,8 @@ export default async function ElectronicSignaturesPage() {
         </h2>
         <p>
           {productName} runs this site and decides what it may be used for.
-          Before each send, the sender confirms the document is not one of the
-          kinds listed here. This page is general information, not legal advice.
+          Senders should not send any of the kinds of document listed here. This
+          page is general information, not legal advice.
         </p>
       </section>
     </PublicDocumentShell>

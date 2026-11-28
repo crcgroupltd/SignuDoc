@@ -7,11 +7,11 @@ import { writeSamplePdf } from "./support/sample-pdf";
 // administrator.
 
 // 120 letters with no space: a title the form accepts, and one word the
-// confirmation dialog has to break.
+// summary beside the Send button has to break.
 const LONG_TITLE = "W".repeat(120);
 
 for (const width of [1440, 1024]) {
-  test(`a long unbroken title keeps Send now on screen at ${String(width)} px`, async ({
+  test(`a long unbroken title keeps Send envelope on screen at ${String(width)} px`, async ({
     page,
   }, testInfo) => {
     await page.setViewportSize({ height: 850, width });
@@ -41,29 +41,22 @@ for (const width of [1440, 1024]) {
     await expect(page.getByRole("status")).toHaveText("Saved");
     await page.getByRole("button", { name: "Next →" }).click();
     await expect(page).toHaveURL(/\/review$/);
-    await page.getByRole("button", { name: "Send envelope" }).click();
+    const summary = page.getByTestId("send-summary");
+    const sendButton = page.getByRole("button", { name: "Send envelope" });
+    const summaryBox = await summary.boundingBox();
+    const sendBox = await sendButton.boundingBox();
 
-    const confirmation = page.getByRole("dialog", {
-      name: "Send this envelope?",
-    });
-
-    await confirmation.getByRole("checkbox").check();
-
-    const dialogBox = await confirmation.boundingBox();
-    const sendNow = confirmation.getByRole("button", { name: "Send now" });
-    const sendBox = await sendNow.boundingBox();
-
-    // The dialog and its button stay inside the window, and the whole
-    // title is inside the dialog.
-    expect(dialogBox!.x).toBeGreaterThanOrEqual(0);
-    expect(dialogBox!.x + dialogBox!.width).toBeLessThanOrEqual(width);
+    // The summary beside the button wraps the whole title, and the button
+    // stays inside the window.
+    await expect(summary).toContainText(LONG_TITLE);
+    expect(summaryBox!.x).toBeGreaterThanOrEqual(0);
+    expect(summaryBox!.x + summaryBox!.width).toBeLessThanOrEqual(width);
     expect(sendBox!.x + sendBox!.width).toBeLessThanOrEqual(width);
     expect(
-      await confirmation.evaluate(
+      await summary.evaluate(
         (element) => element.scrollWidth <= element.clientWidth,
       ),
     ).toBe(true);
-    await expect(confirmation).toContainText(LONG_TITLE);
-    await sendNow.click({ trial: true });
+    await sendButton.click({ trial: true });
   });
 }

@@ -129,7 +129,7 @@ curl https://sign.example.com/api/v1/envelopes \
         "x": 0.5, "y": 0.8, "width": 0.2, "height": 0.03 }
     ],
     "metadata": { "invoice": "INV-1042" },
-    "send": { "expiresInDays": 14, "permittedUseConfirmed": true }
+    "send": { "expiresInDays": 14 }
   }'
 ```
 
@@ -158,10 +158,9 @@ Things to know:
   signer's name when they sign), `text`, `checkbox`, `number`, `dropdown`
   (with `options`), `radio` (buttons with one `groupId` are one question). `required` is true unless set to false. Every signer needs at
   least one `signature` field.
-- **Sending** needs `"permittedUseConfirmed": true`: your app confirms, as the
-  web app's send button asks a person to, that the envelope is an ordinary
-  business agreement and not one of the kinds of document that the law does
-  not let be signed electronically (see `/electronic-signatures` on your
+- **Sending**: `permittedUseConfirmed` is no longer needed; it is accepted
+  and ignored, so existing calls keep working. Check that the document is
+  one that may be signed electronically (see `/electronic-signatures` on your
   install). `expiresInDays` (1 to 365) and `reminderIntervalDays` (1 to 30)
   are as in the web app, and `signatureLevel` is `advanced` or `qualified` on
   installs with a signing provider. `"delivery": "embedded"` sends no
@@ -464,7 +463,7 @@ signed in a page on its site.
 Send as usual with `"delivery": "embedded"` in `send`:
 
 ```json
-"send": { "delivery": "embedded", "permittedUseConfirmed": true }
+"send": { "delivery": "embedded" }
 ```
 
 Embedded envelopes are simple electronic signatures with no extra checks:

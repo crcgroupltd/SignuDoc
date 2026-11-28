@@ -42,13 +42,6 @@ test("closing the signature dialog puts focus back on the field that opened it",
     await page.getByRole("button", { name: "Next →" }).click();
     await expect(page).toHaveURL(/\/review$/);
     await page.getByRole("button", { name: "Send envelope" }).click();
-
-    const confirmation = page.getByRole("dialog", {
-      name: "Send this envelope?",
-    });
-
-    await confirmation.getByRole("checkbox").check();
-    await confirmation.getByRole("button", { name: "Send now" }).click();
     await expect(page).toHaveURL(/\/envelopes\/[^/]+$/);
   });
 

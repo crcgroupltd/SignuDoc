@@ -1,7 +1,5 @@
 // What documents this software may be used for, shown on every install at
-// /electronic-signatures and confirmed by the sender before each send. The
-// version is stored with each send, so the record shows which list the
-// sender confirmed.
+// /electronic-signatures. The version is the date the list last changed.
 
 export const PERMITTED_USE_VERSION = "2026-11-14";
 export const PERMITTED_USE_PATH = "/electronic-signatures";

@@ -122,17 +122,10 @@ test("two signers of one step sign in any order, then the next step is invited",
     await expect(
       page.getByText("everyone numbered 1 receives an email", { exact: false }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Send envelope" }).click();
-
-    const confirmation = page.getByRole("dialog", {
-      name: "Send this envelope?",
-    });
-
-    await expect(confirmation).toContainText(
+    await expect(page.getByTestId("send-summary")).toContainText(
       "Avery Together and Blake Together will be notified immediately, to sign at the same time.",
     );
-    await confirmation.getByRole("checkbox").check();
-    await confirmation.getByRole("button", { name: "Send now" }).click();
+    await page.getByRole("button", { name: "Send envelope" }).click();
     await expect(page).toHaveURL(/\/envelopes\/[^/]+$/);
   });
 

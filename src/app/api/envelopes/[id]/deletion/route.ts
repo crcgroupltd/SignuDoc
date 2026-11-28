@@ -2,10 +2,7 @@ import { NextResponse } from "next/server";
 
 import { requireAdminSession } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/connection";
-import {
-  cancelEnvelopeDeletion,
-  scheduleEnvelopeDeletion,
-} from "@/lib/envelope-deletion";
+import { deleteFinishedEnvelope } from "@/lib/envelope-deletion";
 import { EnvelopeMutationError } from "@/lib/envelopes";
 import { logRouteError } from "@/lib/security/logging";
 import {
@@ -18,9 +15,8 @@ import {
   getRequestUserAgent,
 } from "@/lib/security/request";
 
-// A finished envelope's scheduled deletion. POST schedules it, DELETE
-// cancels it; only an administrator may do either. Drafts are deleted with
-// DELETE on the envelope itself.
+// Deletes a finished envelope at once. Only an administrator may. Drafts are
+// deleted with DELETE on the envelope itself.
 
 type EnvelopeDeletionRouteContext = {
   params: Promise<{
@@ -30,10 +26,9 @@ type EnvelopeDeletionRouteContext = {
 
 const NO_STORE = { "cache-control": "private, no-store" };
 
-async function handle(
+export async function POST(
   request: Request,
   context: EnvelopeDeletionRouteContext,
-  action: "cancel" | "schedule",
 ) {
   const sessionResult = await requireAdminSession(request);
 
@@ -58,31 +53,24 @@ async function handle(
     return rateLimitResponse;
   }
 
-  const actor = { email: session.user.email, userId: session.user.id };
-  const userAgent = getRequestUserAgent(request.headers);
+  const body = (await request.json().catch(() => null)) as {
+    reason?: unknown;
+  } | null;
 
   try {
-    if (action === "cancel") {
-      const result = await cancelEnvelopeDeletion(
-        id,
-        { actor, ipAddress, userAgent },
-        { database: getDb() },
-      );
-
-      return NextResponse.json(result, { headers: NO_STORE, status: 200 });
-    }
-
-    const body = (await request.json().catch(() => null)) as {
-      reason?: unknown;
-    } | null;
-    const result = await scheduleEnvelopeDeletion(
+    await deleteFinishedEnvelope(
       id,
-      { actor, ipAddress, reason: body?.reason ?? null, userAgent },
+      {
+        actor: { email: session.user.email, userId: session.user.id },
+        ipAddress,
+        reason: body?.reason ?? null,
+        userAgent: getRequestUserAgent(request.headers),
+      },
       { database: getDb() },
     );
 
     return NextResponse.json(
-      { deleteAfter: result.deleteAfter, envelopeId: id },
+      { deletedEnvelopeId: id, redirectPath: "/dashboard" },
       { headers: NO_STORE, status: 200 },
     );
   } catch (error) {
@@ -96,33 +84,14 @@ async function handle(
     logRouteError(error, {
       category: "finished_envelope_delete_failure",
       ipAddress,
-      message:
-        action === "cancel"
-          ? "Unexpected failure while cancelling an envelope's deletion."
-          : "Unexpected failure while scheduling an envelope's deletion.",
+      message: "Unexpected failure while deleting a finished envelope.",
       path: getRequestPathname(request),
       userId: session.user.id,
     });
 
     return NextResponse.json(
-      {
-        error:
-          action === "cancel"
-            ? "Unable to cancel this deletion."
-            : "Unable to schedule this envelope's deletion.",
-      },
+      { error: "Unable to delete this envelope." },
       { headers: NO_STORE, status: 500 },
     );
   }
-}
-
-export function POST(request: Request, context: EnvelopeDeletionRouteContext) {
-  return handle(request, context, "schedule");
-}
-
-export function DELETE(
-  request: Request,
-  context: EnvelopeDeletionRouteContext,
-) {
-  return handle(request, context, "cancel");
 }

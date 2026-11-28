@@ -466,7 +466,6 @@ function createFakeRetentionPool(
       sql.includes("rate_limits") ||
       sql.includes("api_idempotency_keys") ||
       sql.includes("webhook_deliveries") ||
-      sql.includes("scheduled_envelope_deletions") ||
       sql.includes("FROM envelopes e")
     ) {
       return queryResult([], 0);

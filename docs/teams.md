@@ -26,7 +26,7 @@ Making, renaming and deleting a team, and adding and removing people, are record
 | Download the signed PDF and certificate once finished                                | yes        | yes                               | yes              | no          |
 | Edit a draft, send, remind, change the deadline or reminders, correct a signer, void | yes        | no                                | no               | no          |
 | Copy to a new draft, save as a template                                              | yes        | no                                | no               | no          |
-| Schedule a finished envelope for deletion (14 days), or cancel that                  | if admin   | no                                | yes              | no          |
+| Delete a finished envelope (at once)                                                 | if admin   | no                                | yes              | no          |
 
 Opening or downloading someone else's file, by an administrator or by a teammate, is recorded in the site audit trail as "Another member's file downloaded". An envelope handed to an administrator when its sender's account was closed is that administrator's, so the closed account's teammates see it only if they are on a team with that administrator.
 

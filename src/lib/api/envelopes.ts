@@ -70,10 +70,9 @@ const metadataSchema = z
 export const apiSendOptionsSchema = z.object({
   delivery: z.enum(["email", "embedded"]).optional(),
   expiresInDays: deadlineDaysSchema.optional(),
-  permittedUseConfirmed: z.literal(true, {
-    message:
-      "Set permittedUseConfirmed to true to confirm the envelope is an ordinary business agreement (see /electronic-signatures on your install).",
-  }),
+  // No longer required. Accepted and ignored, so existing callers keep
+  // working.
+  permittedUseConfirmed: z.boolean().optional(),
   reminderIntervalDays: reminderIntervalDaysSchema.optional(),
   signatureLevel: z.enum(["simple", "advanced", "qualified"]).optional(),
 });

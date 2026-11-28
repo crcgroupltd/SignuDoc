@@ -53,20 +53,13 @@ test("an approver approves after the signer, and that finishes the envelope", as
     await expect(page.getByRole("status")).toHaveText("Saved");
     await page.getByRole("button", { name: "Next →" }).click();
     await expect(page).toHaveURL(/\/review$/);
-    await page.getByRole("button", { name: "Send envelope" }).click();
-
-    const confirmation = page.getByRole("dialog", {
-      name: "Send this envelope?",
-    });
-
-    await expect(confirmation).toContainText(
+    await expect(page.getByTestId("send-summary")).toContainText(
       "will be sent to 1 signer and 1 approver.",
     );
-    await expect(confirmation).toContainText(
+    await expect(page.getByTestId("send-summary")).toContainText(
       "The first person (Sam Signer) will be notified immediately.",
     );
-    await confirmation.getByRole("checkbox").check();
-    await confirmation.getByRole("button", { name: "Send now" }).click();
+    await page.getByRole("button", { name: "Send envelope" }).click();
     await expect(page).toHaveURL(/\/envelopes\/[^/]+$/);
   });
 

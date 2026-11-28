@@ -40,7 +40,6 @@ async function handle(request: Request) {
         outcome.status === "ran"
           ? {
               ...outcome.summary,
-              deletions: outcome.deletions,
               schedule: outcome.schedule,
             }
           : outcome,

@@ -549,13 +549,6 @@ test("a new install is set up, a sender sends a PDF and a recipient signs it", a
     await page.getByLabel("Automatic reminders").selectOption("2");
     await page.getByRole("button", { name: "Send envelope" }).click();
 
-    const confirmation = page.getByRole("dialog", {
-      name: "Send this envelope?",
-    });
-
-    await confirmation.getByRole("checkbox").check();
-    await confirmation.getByRole("button", { name: "Send now" }).click();
-
     await expect(page).toHaveURL(new RegExp(`/envelopes/${envelopeId}$`));
     await expect(page.getByText(/^Expires .+\.$/)).toBeVisible();
     await expect(
@@ -997,13 +990,6 @@ test("in Part 11 mode a verified account signs, with its password and a stated m
 
   async function trySend() {
     await page.getByRole("button", { name: "Send envelope" }).click();
-
-    const confirmation = page.getByRole("dialog", {
-      name: "Send this envelope?",
-    });
-
-    await confirmation.getByRole("checkbox").check();
-    await confirmation.getByRole("button", { name: "Send now" }).click();
   }
 
   await test.step("it is not sent until an administrator confirms who the signer is", async () => {
@@ -1200,17 +1186,12 @@ test("a signer signs with a qualified signature in their own name, through the s
 
     await page.getByLabel("Signature type").selectOption("qualified");
     await expect(page.getByText(/this is not legal advice/)).toBeVisible();
-    await page.getByRole("button", { name: "Send envelope" }).click();
-
-    const confirmation = page.getByRole("dialog", {
-      name: "Send this envelope?",
-    });
-
     await expect(
-      confirmation.getByText(`Signature type: ${signatureType}.`),
+      page
+        .getByTestId("send-summary")
+        .getByText(`Signature type: ${signatureType}.`),
     ).toBeVisible();
-    await confirmation.getByRole("checkbox").check();
-    await confirmation.getByRole("button", { name: "Send now" }).click();
+    await page.getByRole("button", { name: "Send envelope" }).click();
     await expect(page).toHaveURL(new RegExp(`/envelopes/${envelopeId}$`));
     await expect(page.getByText(signatureType)).toBeVisible();
   });
@@ -1345,13 +1326,6 @@ test("a signer who declines is told the decline was recorded, not that the link 
     await page.getByRole("button", { name: "Next →" }).click();
     await expect(page).toHaveURL(/\/review$/);
     await page.getByRole("button", { name: "Send envelope" }).click();
-
-    const confirmation = page.getByRole("dialog", {
-      name: "Send this envelope?",
-    });
-
-    await confirmation.getByRole("checkbox").check();
-    await confirmation.getByRole("button", { name: "Send now" }).click();
     await expect(page).toHaveURL(new RegExp(`/envelopes/${envelopeId}$`));
   });
 
@@ -1412,7 +1386,7 @@ test("a signer who declines is told the decline was recorded, not that the link 
     ).toBeVisible();
   });
 
-  await test.step("an administrator sees another member's envelope and schedules its deletion", async () => {
+  await test.step("an administrator sees another member's envelope and deletes it", async () => {
     // The envelope becomes a plain member's, as if they had sent it.
     const memberId = `member-${runId}`;
     const memberEmail = `member+${runId}@example.com`;
@@ -1481,62 +1455,25 @@ test("a signer who declines is told the decline was recorded, not that the link 
     await page.getByRole("button", { name: "Download certificate" }).click();
     expect((await download).suggestedFilename()).toMatch(/\.pdf$/);
 
-    // Nothing goes at once: the deletion is scheduled, and the sender is
-    // emailed a link to download it.
-    async function scheduleDeletion(reason: string) {
-      await page.getByRole("button", { name: "Delete envelope" }).click();
+    // Deleting it asks once, then it is gone at once.
+    await page.getByRole("button", { name: "Delete envelope" }).click();
 
-      const confirm = page.getByRole("dialog", {
-        name: "Schedule this envelope for deletion?",
-      });
-
-      await confirm.getByLabel("Reason (optional)").fill(reason);
-      await confirm.getByRole("button", { name: "Schedule deletion" }).click();
-      await expect(page.getByText(/Scheduled to be deleted on/)).toBeVisible();
-      await expect(page.getByText(`Reason: ${reason}`)).toBeVisible();
-      await expect(
-        page.getByRole("button", { name: "Delete envelope" }),
-      ).toHaveCount(0);
-    }
-
-    await scheduleDeletion("Changed my mind.");
-
-    const notice = await waitForEmail({
-      template: "deletion_notice",
-      to: memberEmail,
+    const confirm = page.getByRole("dialog", {
+      name: "Delete this envelope permanently?",
     });
 
-    expect(notice.subject).toMatch(/^"Terms to decline" will be deleted on /);
-    expect(notice.text).toContain(`/envelopes/${envelopeId}`);
+    await confirm.getByLabel("Reason (optional)").fill("Never agreed.");
+    await confirm.getByRole("button", { name: "Delete permanently" }).click();
+    await expect(page).toHaveURL(/\/dashboard\?view=all$/);
 
-    // Any administrator can cancel until then; the sender is told.
-    await page.getByRole("button", { name: "Cancel deletion" }).click();
-    await page
-      .getByRole("dialog", { name: "Cancel this deletion?" })
-      .getByRole("button", { name: "Cancel deletion" })
-      .click();
-    await expect(page.getByText(/Scheduled to be deleted on/)).toHaveCount(0);
-    await expect
-      .poll(async () => {
-        const latest = await waitForEmail({
-          template: "deletion_notice",
-          to: memberEmail,
-        });
+    const gone = await page.request.get(
+      `/api/envelopes/${envelopeId}/document`,
+    );
 
-        return latest.subject;
-      })
-      .toBe('"Terms to decline" will not be deleted');
+    expect(gone.status()).toBe(404);
 
-    await scheduleDeletion("Never agreed.");
-
-    // The envelope itself stays until the wait is over.
-    await page.reload();
-    await expect(
-      page.getByRole("heading", { name: "Terms to decline" }),
-    ).toBeVisible();
-
-    // The download, the request and its cancellation stay on record in the
-    // install's audit trail, with whose envelope it was.
+    // The download and the deletion stay on record in the install's audit
+    // trail, with whose envelope it was.
     const audit = await page.request.get("/api/admin/audit");
     const { events } = (await audit.json()) as {
       events: { event: string; metadata: Record<string, unknown> | null }[];
@@ -1551,18 +1488,13 @@ test("a signer who declines is told the decline was recorded, not that the link 
       ownerEmail: memberEmail,
     });
     expect(
-      events.find((event) => event.event === "envelope_deletion_scheduled")
-        ?.metadata,
+      events.find((event) => event.event === "envelope_deleted")?.metadata,
     ).toMatchObject({
       envelopeId,
       ownerEmail: memberEmail,
       reason: "Never agreed.",
       status: "declined",
     });
-    expect(
-      events.find((event) => event.event === "envelope_deletion_cancelled")
-        ?.metadata,
-    ).toMatchObject({ envelopeId, ownerEmail: memberEmail });
   });
 });
 
@@ -1628,13 +1560,6 @@ test("a long Text answer keeps the signing page within the window", async ({
     await page.getByRole("button", { name: "Next →" }).click();
     await expect(page).toHaveURL(/\/review$/);
     await page.getByRole("button", { name: "Send envelope" }).click();
-
-    const confirmation = page.getByRole("dialog", {
-      name: "Send this envelope?",
-    });
-
-    await confirmation.getByRole("checkbox").check();
-    await confirmation.getByRole("button", { name: "Send now" }).click();
     await expect(page).toHaveURL(/\/envelopes\/[^/]+$/);
   });
 

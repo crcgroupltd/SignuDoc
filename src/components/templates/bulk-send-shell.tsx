@@ -23,7 +23,6 @@ import {
   copyRecipientPairError,
   serializeBulkSendResultsCsv,
 } from "@/lib/bulk-send-csv";
-import { PERMITTED_USE_PATH } from "@/lib/permitted-uses";
 import { formatReminderInterval } from "@/lib/services/reminders";
 import { SIGNATURE_MEANING_DETAILS } from "@/lib/signature-meanings";
 import type { UseTemplateData } from "@/lib/templates";
@@ -198,17 +197,12 @@ export function BulkSendShell({
   const preview =
     checked && checked.key === requestKey ? checked.preview : null;
 
-  async function postBulkSend(
-    request: BulkSendRequest,
-    confirm: boolean,
-    permittedUseConfirmed = false,
-  ) {
+  async function postBulkSend(request: BulkSendRequest, confirm: boolean) {
     const response = await fetch(`/api/templates/${current.id}/bulk-send`, {
       body: JSON.stringify({
         ...request,
         batchKey: confirm ? batchKeyRef.current.key : undefined,
         confirm,
-        permittedUseConfirmed,
       }),
       headers: { "content-type": "application/json" },
       method: "POST",
@@ -291,7 +285,7 @@ export function BulkSendShell({
     setIsSending(true);
 
     try {
-      const sent = await postBulkSend(checked.request, true, true);
+      const sent = await postBulkSend(checked.request, true);
 
       setResults(sent);
       setChecked(null);
@@ -700,8 +694,6 @@ function SendManyDialog({
   skippedCount: number;
   templateName: string;
 }) {
-  const [isPermittedUseConfirmed, setIsPermittedUseConfirmed] = useState(false);
-
   return (
     <Dialog
       open
@@ -730,33 +722,6 @@ function SendManyDialog({
             </DialogDescription>
           </DialogHeader>
 
-          <label className="well block px-4 py-4">
-            <span className="flex items-start gap-3">
-              <Checkbox
-                autoFocus
-                checked={isPermittedUseConfirmed}
-                className="mt-1"
-                disabled={isSending}
-                onCheckedChange={(checked) =>
-                  setIsPermittedUseConfirmed(checked === true)
-                }
-              />
-              <span className="text-sm leading-6 text-(--secondary)">
-                By sending, you confirm these documents are ordinary business
-                agreements and not a will, court order, legally required
-                consumer disclosure, or other{" "}
-                <a
-                  className="font-semibold text-(--accent-ink) underline decoration-[rgb(var(--accent-rgb)/0.35)] underline-offset-4"
-                  href={PERMITTED_USE_PATH}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  document that cannot be signed electronically
-                </a>
-                .
-              </span>
-            </span>
-          </label>
 
           {errorMessage ? (
             <div className="notice notice-danger" role="alert">
@@ -772,11 +737,7 @@ function SendManyDialog({
             >
               Cancel
             </ShellButton>
-            <ShellButton
-              disabled={!isPermittedUseConfirmed}
-              loading={isSending}
-              onClick={onConfirm}
-            >
+            <ShellButton loading={isSending} onClick={onConfirm}>
               {isSending ? "Sending..." : "Send now"}
             </ShellButton>
           </div>

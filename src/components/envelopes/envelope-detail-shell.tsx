@@ -14,6 +14,7 @@ import Link from "next/link";
 import { type ReactNode, useState } from "react";
 
 import { DocumentThumbnail } from "@/components/shared/document-thumbnail";
+import { buildViewerHref } from "@/lib/document-view";
 import { ShellButton } from "@/components/shared/form-shell";
 import { Textarea } from "@/components/ui/textarea";
 import { StatusPanel } from "@/components/shared/status-panel";
@@ -264,6 +265,34 @@ export function EnvelopeDetailShell({
     activeRecord.status === "voided"
       ? `/api/envelopes/${encodeURIComponent(envelopeId)}/document`
       : null;
+  // Documents open in the app's own viewer, which comes back here.
+  const viewerBack = `/envelopes/${encodeURIComponent(envelopeId)}`;
+  const documentViewHref = documentUrl
+    ? buildViewerHref({
+        back: viewerBack,
+        src: documentUrl,
+        title: activeRecord.title,
+      })
+    : null;
+  const signedViewHref =
+    activeRecord.status === "completed"
+      ? buildViewerHref({
+          back: viewerBack,
+          src: `/api/envelopes/${encodeURIComponent(envelopeId)}/download?type=signed`,
+          title: `${activeRecord.title} (signed)`,
+        })
+      : null;
+  const certificateViewHref =
+    activeRecord.status === "completed" ||
+    activeRecord.status === "declined" ||
+    activeRecord.status === "voided"
+      ? buildViewerHref({
+          back: viewerBack,
+          src: `/api/envelopes/${encodeURIComponent(envelopeId)}/download?type=evidence`,
+          title: `${activeRecord.title} (certificate)`,
+        })
+      : null;
+  const thumbnailViewHref = documentViewHref ?? signedViewHref;
   const activeSigner =
     activeRecord.status === "sent"
       ? activeRecord.signers.find((signer) => signer.status === "waiting")
@@ -573,19 +602,17 @@ export function EnvelopeDetailShell({
 
         <div className="mt-5 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 items-center gap-5">
-            {documentUrl ? (
-              <a
-                aria-label={`View ${activeRecord.title} (opens in a new tab)`}
+            {thumbnailViewHref ? (
+              <Link
+                aria-label={`View ${activeRecord.title}`}
                 className="hidden h-28 shrink-0 items-center justify-center rounded-2xl bg-(--surface) px-4 py-3 outline-none transition hover:bg-(--surface-strong) focus-visible:ring-3 focus-visible:ring-ring/50 sm:flex"
-                href={documentUrl}
-                rel="noopener noreferrer"
-                target="_blank"
+                href={thumbnailViewHref}
               >
                 <DocumentThumbnail
                   envelopeId={envelopeId}
                   title={activeRecord.title}
                 />
-              </a>
+              </Link>
             ) : (
               <span className="hidden h-28 shrink-0 items-center justify-center rounded-2xl bg-(--surface) px-4 py-3 sm:flex">
                 <DocumentThumbnail
@@ -632,8 +659,8 @@ export function EnvelopeDetailShell({
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap lg:justify-end">
-            {documentUrl ? (
-              <ShellButton href={documentUrl} inNewTab variant="secondary">
+            {documentViewHref ? (
+              <ShellButton href={documentViewHref} variant="secondary">
                 <FileTextIcon
                   aria-hidden="true"
                   className="size-[1.125rem]"
@@ -673,6 +700,23 @@ export function EnvelopeDetailShell({
                   Send reminder
                 </ShellButton>
               </>
+            ) : null}
+
+            {signedViewHref ? (
+              <ShellButton href={signedViewHref} variant="secondary">
+                <FileTextIcon
+                  aria-hidden="true"
+                  className="size-[1.125rem]"
+                  strokeWidth={2.2}
+                />
+                View signed PDF
+              </ShellButton>
+            ) : null}
+
+            {certificateViewHref ? (
+              <ShellButton href={certificateViewHref} variant="secondary">
+                View certificate
+              </ShellButton>
             ) : null}
 
             {activeRecord.status === "completed" ? (

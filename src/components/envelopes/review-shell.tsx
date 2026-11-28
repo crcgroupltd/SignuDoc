@@ -15,6 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { buildViewerHref } from "@/lib/document-view";
 import type { ReviewEnvelopeData } from "@/lib/envelopes";
 import { PERMITTED_USE_PATH } from "@/lib/permitted-uses";
 import { formatReminderInterval } from "@/lib/services/reminders";
@@ -509,6 +510,16 @@ export function ReviewShell({
             variant="secondary"
           >
             ← Back
+          </ShellButton>
+          <ShellButton
+            href={buildViewerHref({
+              back: `/envelopes/${envelopeId}/review`,
+              src: `/api/envelopes/${encodeURIComponent(envelopeId)}/preview`,
+              title: `Preview: ${activeRecord.title}`,
+            })}
+            variant="secondary"
+          >
+            Preview
           </ShellButton>
           <ShellButton disabled={!canSend} onClick={openConfirmation}>
             Send envelope

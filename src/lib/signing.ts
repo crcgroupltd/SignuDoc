@@ -2133,10 +2133,18 @@ export async function getSigningPayloadForToken(
         // What the signers of earlier steps entered. Someone signing at the
         // same time may have signed already, but what they entered is not
         // shown: it was not on the page when this signer's turn began.
+        // Names are the exception: every signer's name was put into their
+        // name fields when the envelope was sent, so everyone sees them.
+        if (
+          fieldSigner === undefined ||
+          typeof field.submittedAt !== "number"
+        ) {
+          return false;
+        }
+
         return (
-          fieldSigner !== undefined &&
-          isEarlierStep(fieldSigner, context.signer) &&
-          typeof field.submittedAt === "number"
+          isEarlierStep(fieldSigner, context.signer) ||
+          (field.type === "name" && field.signerId !== context.signer.id)
         );
       })
       .map(async (field) => ({

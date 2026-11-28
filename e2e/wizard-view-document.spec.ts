@@ -25,6 +25,16 @@ async function expectTheDocumentAsSent(page: Page, documentUrl: string) {
   );
 }
 
+/** The in-app viewer's link for a document, as the envelope page builds it. */
+function viewerPathFor(documentUrl: string): RegExp {
+  const encoded = encodeURIComponent(documentUrl).replace(
+    /[.*+?^${}()|[\]\\]/g,
+    "\\$&",
+  );
+
+  return new RegExp(`^/view\\?.*src=${encoded}`);
+}
+
 async function countOriginalViews(envelopeId: string): Promise<number> {
   const database = new pg.Client({ connectionString: e2eDatabaseUrl });
 
@@ -92,43 +102,38 @@ test("a sender opens the document while it is out for signature, and after voidi
     await expect(page).toHaveURL(new RegExp(`/envelopes/${envelopeId}$`));
   });
 
-  await test.step("while it is out, View document and the thumbnail open it in a new tab", async () => {
+  await test.step("while it is out, View document and the thumbnail open it in the app's viewer", async () => {
     const viewButton = page.getByRole("link", { name: "View document" });
+    const thumbnailLink = page.getByRole("link", { name: `View ${TITLE}` });
 
     await expect(viewButton).toBeVisible();
-    await expect(viewButton).toHaveAttribute("href", documentUrl());
-    await expect(viewButton).toHaveAttribute("target", "_blank");
-    await expect(viewButton).toHaveAttribute("rel", /noopener/);
+    await expect(viewButton).toHaveAttribute(
+      "href",
+      viewerPathFor(documentUrl()),
+    );
+    await expect(viewButton).not.toHaveAttribute("target", "_blank");
+    await expect(thumbnailLink).toHaveAttribute(
+      "href",
+      viewerPathFor(documentUrl()),
+    );
 
-    const thumbnailLink = page.getByRole("link", {
-      name: `View ${TITLE} (opens in a new tab)`,
-    });
-
-    await expect(thumbnailLink).toBeVisible();
-    await expect(thumbnailLink).toHaveAttribute("href", documentUrl());
-    await expect(thumbnailLink).toHaveAttribute("target", "_blank");
-
-    // Clicking each one opens a new tab on the document and leaves this
-    // page where it was.
+    // The viewer loads the document from the same route and shows its
+    // pages, with a way back to the envelope.
     for (const link of [viewButton, thumbnailLink]) {
-      const documentResponse = page
-        .context()
-        .waitForEvent(
-          "response",
-          (response) =>
-            new URL(response.url()).pathname === documentUrl() &&
-            response.request().resourceType() === "document",
-        );
-      const popupOpened = page.waitForEvent("popup");
+      const documentResponse = page.waitForResponse(
+        (response) => new URL(response.url()).pathname === documentUrl(),
+      );
 
       await link.click();
-
-      const popup = await popupOpened;
-
+      await expect(page).toHaveURL(/\/view\?/);
       expect((await documentResponse).status()).toBe(200);
-      expect(popup).not.toBe(page);
+      await expect(page.getByRole("heading", { name: TITLE })).toBeVisible();
+      await expect(
+        page.getByRole("listitem", { name: "Page 1" }),
+      ).toBeVisible();
+      await expect(page.getByText(/^Page 1 of \d+$/)).toBeVisible();
+      await page.getByRole("link", { name: "Back" }).click();
       await expect(page).toHaveURL(new RegExp(`/envelopes/${envelopeId}$`));
-      await popup.close();
     }
 
     await expectTheDocumentAsSent(page, documentUrl());
@@ -150,7 +155,7 @@ test("a sender opens the document while it is out for signature, and after voidi
     ).toBeVisible();
     await expect(
       page.getByRole("link", { name: "View document" }),
-    ).toHaveAttribute("href", documentUrl());
+    ).toHaveAttribute("href", viewerPathFor(documentUrl()));
     await expectTheDocumentAsSent(page, documentUrl());
   });
 
@@ -180,7 +185,7 @@ test("a sender opens the document while it is out for signature, and after voidi
     await expect(page.getByText(/Sent by Morgan Member/)).toBeVisible();
     await expect(
       page.getByRole("link", { name: "View document" }),
-    ).toHaveAttribute("href", documentUrl());
+    ).toHaveAttribute("href", viewerPathFor(documentUrl()));
 
     const before = await countOriginalViews(envelopeId);
 

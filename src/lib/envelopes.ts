@@ -3126,6 +3126,27 @@ export async function sendDraftEnvelope(
         [sentAt, envelopeId],
       );
 
+      // Every signer's name goes into their name fields as it is sent, so
+      // the first person to sign already sees who else signs. Signing
+      // fills them again with the name as it stands then, and correcting a
+      // signer's name updates them (correctSentEnvelopeSigner).
+      await tx.query(
+        `
+          UPDATE fields f
+          SET
+            value = s.name,
+            input_method = 'auto',
+            submitted_at = $1,
+            updated_at = $1
+          FROM signers s
+          WHERE f.envelope_id = $2
+            AND f.type = 'name'
+            AND s.id = f.signer_id
+            AND s.envelope_id = f.envelope_id
+        `,
+        [sentAt, envelopeId],
+      );
+
       if (signingProvider) {
         await tx.query(
           `
@@ -3822,6 +3843,20 @@ export async function correctSentEnvelopeSigner(
         409,
       );
     }
+
+    // Their name was put into their name fields when the envelope was sent;
+    // it follows the correction.
+    await tx.query(
+      `
+        UPDATE fields
+        SET value = $1, updated_at = $2
+        WHERE envelope_id = $3
+          AND signer_id = $4
+          AND type = 'name'
+          AND submitted_at IS NOT NULL
+      `,
+      [nextName, nowUnixTimestamp, envelopeId, signerId],
+    );
 
     await tx.query(
       `

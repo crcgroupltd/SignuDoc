@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { buildViewerHref } from "@/lib/document-view";
 import type { TemplateListItem } from "@/lib/templates";
 
 type TemplatesShellProps = {
@@ -158,6 +159,17 @@ export function TemplatesShell({
                   >
                     Delete
                   </button>
+                  <ShellButton
+                    className="min-h-11"
+                    href={buildViewerHref({
+                      back: "/templates",
+                      src: `/api/templates/${template.id}/document`,
+                      title: template.name,
+                    })}
+                    variant="secondary"
+                  >
+                    View
+                  </ShellButton>
                   <ShellButton
                     className="min-h-11"
                     href={`/templates/${template.id}/roles`}

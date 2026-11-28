@@ -36,6 +36,8 @@
 
 Upload a PDF, add up to 25 signers in the order they sign, or have some of them sign at the same time, and add people who only receive the finished copy. Then place fields where they belong: signature, initials, date, name, text, number, checkbox, dropdown and radio buttons, each required or optional and each tied to one signer.
 
+Before sending, **Preview** shows the document as it will go out: prefilled values and every signer's name already in place, with outlines for what each signer still fills. Names are written into name fields when the envelope is sent, so the first person to sign sees who else signs. Documents, signed PDFs, certificates and templates open in the app's own PDF viewer.
+
 ![Placing signature, date and dropdown fields for two signers on a master services agreement](docs/images/prepare.png)
 
 <p align="center">

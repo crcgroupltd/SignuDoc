@@ -7,6 +7,7 @@ import { ShellButton } from "@/components/shared/form-shell";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusPanel } from "@/components/shared/status-panel";
 import { StepIndicator } from "@/components/shared/step-indicator";
+import { buildViewerHref } from "@/lib/document-view";
 import type { ReviewEnvelopeData } from "@/lib/envelopes";
 import { formatReminderInterval } from "@/lib/services/reminders";
 import {
@@ -522,6 +523,17 @@ export function ReviewShell({
             variant="secondary"
           >
             ← Back
+          </ShellButton>
+          <ShellButton
+            disabled={sendPhase === "sending"}
+            href={buildViewerHref({
+              back: `/envelopes/${envelopeId}/review`,
+              src: `/api/envelopes/${encodeURIComponent(envelopeId)}/preview`,
+              title: `Preview: ${activeRecord.title}`,
+            })}
+            variant="secondary"
+          >
+            Preview
           </ShellButton>
           <ShellButton
             disabled={!canSend || Boolean(notice)}

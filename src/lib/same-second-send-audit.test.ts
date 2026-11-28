@@ -323,6 +323,11 @@ function createFakeAuditDb() {
       return queryResult([], updated);
     }
 
+    // Sending fills every signer's name fields. These envelopes have none.
+    if (sql.startsWith("UPDATE fields f SET value = s.name")) {
+      return queryResult([], 0);
+    }
+
     if (sql.startsWith("UPDATE signers SET status = 'notified'")) {
       const signer = signers.find(
         (entry) => entry.id === values[5] && entry.envelopeId === values[6],

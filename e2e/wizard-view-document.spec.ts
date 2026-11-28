@@ -92,13 +92,6 @@ test("a sender opens the document while it is out for signature, and after voidi
     await page.getByRole("button", { name: "Next →" }).click();
     await expect(page).toHaveURL(/\/review$/);
     await page.getByRole("button", { name: "Send envelope" }).click();
-
-    const confirmation = page.getByRole("dialog", {
-      name: "Send this envelope?",
-    });
-
-    await confirmation.getByRole("checkbox").check();
-    await confirmation.getByRole("button", { name: "Send now" }).click();
     await expect(page).toHaveURL(new RegExp(`/envelopes/${envelopeId}$`));
   });
 

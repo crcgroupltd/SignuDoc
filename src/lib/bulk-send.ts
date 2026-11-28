@@ -781,13 +781,6 @@ export async function bulkSendFromTemplate(
     throw new BulkSendError(unsendable, 400);
   }
 
-  if (parsedInput.confirm && parsedInput.permittedUseConfirmed !== true) {
-    throw new BulkSendError(
-      "Confirm that these envelopes are ordinary business agreements before sending.",
-      400,
-    );
-  }
-
   if (parsedInput.confirm && !parsedInput.batchKey) {
     throw new BulkSendError(missingBulkSendBatchKeyMessage, 400);
   }

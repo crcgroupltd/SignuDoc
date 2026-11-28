@@ -86,7 +86,7 @@ Signers see your organization, not SignuDoc. Give the install your name, logo an
 
 The first account is the administrator, and you can make more. Choose who may create an account: people at your email domains, nobody, or anyone. People who only sign never need one. Set how long finished documents are kept, and answer a signer who asks for their data with a built-in export or erasure tool.
 
-Administrators see every member's sent and finished envelopes in an "Everyone's" view of the dashboard, and can delete a finished one: it is deleted 14 days later, after the sender has been emailed, and any administrator can cancel in between. Drafts stay private to the person writing them.
+Administrators see every member's sent and finished envelopes in an "Everyone's" view of the dashboard, and can delete a finished one, which is deleted at once and recorded in the site audit trail. Drafts stay private to the person writing them.
 
 ### Sign-in security, backups and audits
 
@@ -201,7 +201,7 @@ Files stay on disk and emails are written to `.data/outbox` instead of being sen
 
 SignuDoc is not a law firm and does not give legal advice, and nothing here is a promise that a signature made with it will be accepted for a given purpose. It gives you the features that electronic signature laws such as the US ESIGN Act and UETA and the EU's eIDAS regulation look for in a simple electronic signature: each signer's consent to electronic records, a record of who signed, when and how, optional identity checks, and a sealed copy that shows any change. Whether that is enough for a particular document depends on the document, where you and the signers are, and how you use it. Ask a lawyer when it matters.
 
-Every install has a page at `/electronic-signatures` that says what it is for, and senders confirm it before each send. It is meant for ordinary business agreements, such as contracts, NDAs, statements of work, offer letters, purchase orders and approvals. It is **not** built for:
+Every install has a page at `/electronic-signatures` that says what it is for. It is meant for ordinary business agreements, such as contracts, NDAs, statements of work, offer letters, purchase orders and approvals. It is **not** built for:
 
 - documents that need an advanced or qualified electronic signature (AdES or QES) under eIDAS, unless you add a signing provider (see below);
 - protected health information under HIPAA;

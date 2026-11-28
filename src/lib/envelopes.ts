@@ -127,7 +127,6 @@ import {
   isManualNudgeAvailable,
 } from "./services/reminders.ts";
 import { formatEnvelopeOwner, sharesTeamCondition } from "./envelope-access.ts";
-import { PERMITTED_USE_VERSION } from "./permitted-uses.ts";
 import { hashAccessCode } from "./signer-checks.ts";
 import {
   describeSignerLimit,
@@ -3242,11 +3241,8 @@ export async function sendDraftEnvelope(
           metadata: {
             ...(input.apiKeyId ? { apiKeyId: input.apiKeyId } : {}),
             ...(delivery === "embedded" ? { delivery } : {}),
-            // The send route refuses a send without this confirmation.
             expiresAt,
             reminderIntervalDays: input.reminderIntervalDays ?? null,
-            permittedUseConfirmed: true,
-            permittedUseVersion: PERMITTED_USE_VERSION,
             ...(part11 ? { part11: true } : {}),
             ...(signingProvider
               ? {

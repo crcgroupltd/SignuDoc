@@ -286,9 +286,10 @@ export function buildOpenApiDocument(
             },
             expiresInDays: { maximum: 365, minimum: 1, type: "integer" },
             permittedUseConfirmed: {
-              const: true,
+              deprecated: true,
               description:
-                "Confirms the envelope is an ordinary business agreement, as the web app's send button does.",
+                "No longer required. Accepted and ignored.",
+              type: "boolean",
             },
             reminderIntervalDays: {
               description: "Days between reminders, or null for none.",
@@ -303,7 +304,6 @@ export function buildOpenApiDocument(
               type: "string",
             },
           },
-          required: ["permittedUseConfirmed"],
           type: "object",
         },
         Signer: {

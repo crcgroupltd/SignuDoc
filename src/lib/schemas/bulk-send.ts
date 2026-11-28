@@ -44,6 +44,7 @@ export const bulkSendRequestSchema = z.object({
     .optional(),
   csv: z.string().min(1).max(MAX_BULK_SEND_CSV_CHARS),
   expiresInDays: deadlineDaysSchema.optional(),
+  // No longer asked for; accepted and ignored so older pages still work.
   permittedUseConfirmed: z.boolean().optional(),
   reminderIntervalDays: reminderIntervalDaysSchema.optional(),
   requireEmailCode: z.boolean().optional(),
